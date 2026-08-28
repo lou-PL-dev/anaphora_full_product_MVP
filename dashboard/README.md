@@ -1,16 +1,35 @@
-# Anaphora — Round 1 Dashboard
+# Anaphora — Round 1 Dashboard (FastAPI + vanilla JS)
+
+Built from the Claude Design mockup as a
+real, runnable app — the mockup's own README notes it's a preview-only
+prototype (`x-dc`/`support.js` runtime), so this reimplements the same
+layout, palette, and behavior in plain HTML/CSS/JS + FastAPI.
 
 ## Run it
 ```
-pip install streamlit plotly pandas numpy
-streamlit run dashboard_app.py
+pip install -r requirements.txt
+cp .env.example .env   # then paste your real OPENAI_API_KEY
+uvicorn dashboard_api:app --reload
 ```
+Open http://localhost:8000
 
 ## Files
-- `market_data.py` — all sourced market/competitive figures + TAM/SAM/SOM calc, with methodology notes and named assumption constants (easy to defend or tweak for Q&A)
-- `product_data.py` — synthetic Anaphora product metrics (funnel, compatibility scores), seeded for reproducibility
-- `dashboard_app.py` — Streamlit app, 6 charts across "Market Opportunity" and "Simulated Product Metrics"
+- `market_data.py` — sourced market figures + TAM/SAM/SOM as parameterized
+  functions (sliders drive `pct_single`, `pct_pays`, `capture_y3`)
+- `product_data.py` — fixed/seeded simulated product data (funnel, score
+  model), matching the design's exact scenario
+- `dashboard_api.py` — FastAPI backend. All chart data comes from live
+  endpoints, nothing is hardcoded twice. `/api/ask` tries a local
+  rule-based answer bank first (instant, can't misstate a sourced figure),
+  falling back to OpenAI (grounded in the same live data) for anything else
+- `static/` — frontend: fetches from the API, renders KPI cards, the
+  TAM/SAM/SOM bars + sliders, incumbent benchmark, SVG trend chart, growth
+  comparison, product funnel, and score-distribution chart
 
-## Before presenting
-- Swap the SOM assumptions in `market_data.py` (PCT_SINGLE, PCT_PAYS_FOR_DATING_APP, capture rates) for real INSEE Paris figures if you want a tighter number.
-- The funnel chart for TAM/SAM/SOM uses an illustrative EUR-value proxy for the SOM steps (since SOM is defined in users, not currency) — call this out if asked, don't let it look like a directly comparable currency figure.
+## Verified working (this session)
+KPIs, TAM/SAM/SOM recompute correctly when sliders change (defaults:
+882 → 2,646 users; at 50%/30%/8%: 2,520 → 20,160), local `/api/ask` bank,
+and both `/` and `/static/app.js` serve correctly.
+
+**Not tested here:** the OpenAI fallback — this sandbox can't reach
+`api.openai.com`. Test that path locally once your real key is in `.env`.

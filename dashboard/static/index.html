@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anaphora — Market &amp; Product Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-top">
+      <div class="brand">
+        <span class="brand-name">anaphora</span>
+        <span class="brand-tag">Market &amp; Product Dashboard</span>
+      </div>
+      <div class="header-right">
+        <div class="tabs" id="tabs">
+          <button data-tab="market" class="tab active">Market opportunity</button>
+          <button data-tab="product" class="tab">Product metrics</button>
+          <button data-tab="both" class="tab">Both</button>
+        </div>
+        <div class="round-note">Round 1 · Aug 2026<br><span class="accent">Paris-first launch</span></div>
+      </div>
+    </div>
+
+    <div class="ask-row">
+      <div class="ask-bar">
+        <span class="ask-dot"></span>
+        <input id="askInput" placeholder='Ask the data — e.g. "how did you get to the SOM number?"' />
+        <button id="askBtn">Ask</button>
+      </div>
+    </div>
+
+    <div class="suggestions" id="suggestions">
+      <span class="suggestions-label">Try</span>
+      <button class="chip" data-q="How did you arrive at the SOM?">How did you arrive at the SOM?</button>
+      <button class="chip" data-q="Why is this TAM definition right?">Why is this TAM definition right?</button>
+      <button class="chip" data-q="Are the incumbents actually vulnerable?">Are the incumbents actually vulnerable?</button>
+      <button class="chip" data-q="What does friend input change?">What does friend input change?</button>
+      <button class="chip" data-q="Where does the funnel leak?">Where does the funnel leak?</button>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <div id="answerCard" class="answer-card hidden">
+    <div class="answer-dot"></div>
+    <div class="answer-body">
+      <div class="answer-eyebrow" id="answerEyebrow">Anaphora AI · answer</div>
+      <div class="answer-headline" id="answerHeadline"></div>
+      <div class="answer-text" id="answerText"></div>
+      <div class="answer-source" id="answerSource"></div>
+    </div>
+    <button class="answer-close" id="answerClose">×</button>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <section id="marketSection" class="section-stack">
+
+    <div class="grid-1-55-1">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">TAM / SAM / SOM</div>
+            <div class="card-sub">Top-down market, bottom-up capture — move the sliders to stress-test it.</div>
+          </div>
+          <div class="pill">Sourced</div>
+        </div>
+        <div id="funnelRows" class="funnel-rows"></div>
+        <div class="sliders" id="sliders">
+          <div class="slider-block">
+            <div class="slider-label"><span>Adults single</span><span id="pctSingleVal" class="slider-val"></span></div>
+            <input type="range" id="pctSingle" min="20" max="50" step="1" />
+          </div>
+          <div class="slider-block">
+            <div class="slider-label"><span>Already pay for an app</span><span id="pctPaysVal" class="slider-val"></span></div>
+            <input type="range" id="pctPays" min="5" max="30" step="1" />
+          </div>
+          <div class="slider-block">
+            <div class="slider-label"><span>Y3 capture rate</span><span id="captureY3Val" class="slider-val"></span></div>
+            <input type="range" id="captureY3" min="1" max="8" step="1" />
+          </div>
+        </div>
+        <div class="footnote" id="somFootnote"></div>
+      </div>
+
+      <div class="card card-dark">
+        <div class="card-title-dark">Why now</div>
+        <div class="card-sub-dark">Demand drivers, not trend data.</div>
+        <div id="whyNow" class="why-now"></div>
+        <div class="footnote-dark">Eurostat single-household data, 2015–2025.</div>
+      </div>
+    </div>
+
+    <div class="grid-1-1">
+      <div class="card">
+        <div class="card-title">Who we're competing for</div>
+        <div class="card-sub">Estimated MAU vs. revenue growth. Scale ≠ momentum.</div>
+        <div id="incumbents" class="incumbents"></div>
+        <div class="footnote">MAU are public estimates, not company-audited. Business of Apps / Mordor Intelligence, 2025–26.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Market growth trend</div>
+            <div class="card-sub">EU dating-apps TAM, €Bn. Hover a year.</div>
+          </div>
+          <div class="trend-hover" id="trendHover">
+            <div class="trend-hover-value" id="trendHoverValue"></div>
+            <div class="trend-hover-year" id="trendHoverYear"></div>
+          </div>
+        </div>
+        <svg id="trendChart" viewBox="0 0 480 190" class="trend-svg"></svg>
+        <div class="footnote">Modeled at 7.53% CAGR; 2025 / 2026 / 2034 are sourced, the rest interpolated.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">New entrants are winning while incumbents decline</div>
+          <div class="card-sub">Revenue / user growth, Q1–Q3 2025 — one source, directly comparable.</div>
+        </div>
+        <div class="quote">The swipe model is losing, not the category.</div>
+      </div>
+      <div id="growth" class="growth-rows"></div>
+    </div>
+
+  </section>
+
+  <section id="productSection" class="section-stack hidden">
+    <div class="banner">
+      <strong>Simulated.</strong> Anaphora is pre-seed with no real users — these show what the product tracks post-launch, from a seeded model of 500 signups.
+    </div>
+
+    <div class="grid-1-1">
+      <div class="card">
+        <div class="card-title">Onboarding → paid conversion</div>
+        <div class="card-sub">Click a step to see its drop-off.</div>
+        <div id="productFunnel" class="product-funnel"></div>
+        <div class="funnel-note" id="funnelNote"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Friend input lifts match quality</div>
+            <div class="card-sub">Compatibility score distribution, n=300 each.</div>
+          </div>
+          <div class="lift-box">
+            <div class="lift-value" id="liftValue"></div>
+            <div class="lift-label">pts mean lift</div>
+          </div>
+        </div>
+        <svg id="scoreChart" viewBox="0 0 420 170" class="score-svg"></svg>
+        <div class="legend">
+          <div class="legend-item"><span class="swatch swatch-a"></span>Self-report only · μ 62</div>
+          <div class="legend-item"><span class="swatch swatch-b"></span>+ friend input · μ 71</div>
+        </div>
+        <div class="footnote">Simulated hypothesis, not a measured result.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="sources">
+    Sources: Eurostat, OECD, Mordor Intelligence, MarketDataForecast, Business of Apps, Useluminix.
+    TAM uses the broader "Europe dating apps market" definition (app-based + hybrid matchmaking), not the
+    narrower "online dating services" figure. SOM is bottom-up from a Paris-first launch, in paying users —
+    not a share of TAM.
+  </div>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
