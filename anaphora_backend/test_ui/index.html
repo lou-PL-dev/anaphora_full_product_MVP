@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anaphora Backend — Test UI</title>
+<style>
+  :root { --ink:#1F2D27; --sage:#2F4A3F; --lav:#A69ACD; --bg:#F7F4EF; --card:#FFFFFF; --border:#E0D8CD; --muted:#6B7B72; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: -apple-system, system-ui, sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .user-id { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+  .user-id code { background: #EEE; padding: 2px 6px; border-radius: 4px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--sage); }
+  button { border: none; background: var(--sage); color: white; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #3D6152; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  button.secondary { background: white; color: var(--sage); border: 1px solid var(--border); }
+  input[type=text], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row input { flex: 1; }
+  .chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; max-height: 300px; overflow-y: auto; }
+  .msg { padding: 8px 12px; border-radius: 10px; max-width: 80%; font-size: 14px; }
+  .msg.assistant { background: #EFEAE0; align-self: flex-start; }
+  .msg.user { background: var(--lav); color: white; align-self: flex-end; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .signal { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .signal .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .readiness-bar { height: 10px; background: #EEE; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+  .readiness-fill { height: 100%; background: var(--lav); transition: width .3s; }
+  .breakdown-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+  .met-yes { color: var(--sage); font-weight: 600; }
+  .met-no { color: #bbb; }
+  pre { background: #F0EEE9; padding: 10px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; }
+  .discovery-q { margin-bottom: 14px; }
+  .discovery-q .prompt { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .discovery-q label { display: block; font-size: 13px; margin-bottom: 4px; cursor: pointer; }
+  .insight { background: #F0EAF7; border: 1px solid var(--lav); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Anaphora Backend — Test UI</h1>
+<div class="sub">Manually walk through every endpoint. Not part of the product — a dev tool only.</div>
+<div class="user-id">Testing as user: <code id="userIdDisplay"></code> <button class="secondary" id="newUserBtn" style="padding:2px 8px;font-size:11px;">New test user</button></div>
+
+<div class="card">
+  <h2>1. Conversation</h2>
+  <div id="chat" class="chat"></div>
+  <div id="startRow">
+    <button id="startBtn">Start conversation</button>
+  </div>
+  <div id="messageRow" class="row" style="display:none">
+    <input type="text" id="messageInput" placeholder="Type a reply..." />
+    <button id="sendBtn">Send</button>
+  </div>
+  <div class="status" id="convoStatus"></div>
+  <div class="row" style="display:none" id="completeRow">
+    <button id="completeBtn">Complete conversation → extract Blueprint</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Blueprint</h2>
+  <button class="secondary" id="loadBlueprintBtn">Refresh Blueprint</button>
+  <div id="blueprintList" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>3. Readiness</h2>
+  <button class="secondary" id="loadReadinessBtn">Refresh Readiness</button>
+  <div id="readinessPct" style="font-size:24px;font-weight:600;margin-top:8px"></div>
+  <div class="readiness-bar"><div class="readiness-fill" id="readinessFill" style="width:0%"></div></div>
+  <div id="readinessBreakdown"></div>
+</div>
+
+<div class="card">
+  <h2>4. Discovery — "What kind of life are you building?"</h2>
+  <button class="secondary" id="loadDiscoveryBtn">Load Discovery questions</button>
+  <div id="discoveryForm" style="margin-top:10px"></div>
+  <div id="discoveryResult"></div>
+</div>
+
+<div class="card">
+  <h2>5. Export this session</h2>
+  <div class="status">Grabs everything from this test run — conversation, Blueprint, readiness, Discovery answers — as one JSON blob you can paste to share.</div>
+  <div class="row">
+    <button id="exportBtn">Build export</button>
+    <button class="secondary" id="copyExportBtn" disabled>Copy to clipboard</button>
+    <button class="secondary" id="downloadExportBtn" disabled>Download .json</button>
+  </div>
+  <textarea id="exportOutput" readonly rows="10" style="margin-top:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;"></textarea>
+</div>
+
+<div class="card">
+  <h2>Raw last response</h2>
+  <pre id="rawOutput">—</pre>
+</div>
+
+<script>
+const API = ""; // same origin, backend serves this file itself
+let userId = localStorage.getItem("anaphora_test_user_id");
+if (!userId) {
+  userId = "test-" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem("anaphora_test_user_id", userId);
+}
+document.getElementById("userIdDisplay").textContent = userId;
+
+document.getElementById("newUserBtn").onclick = () => {
+  userId = "test-" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem("anaphora_test_user_id", userId);
+  document.getElementById("userIdDisplay").textContent = userId;
+  conversationId = null;
+  document.getElementById("chat").innerHTML = "";
+  document.getElementById("startRow").style.display = "block";
+  document.getElementById("messageRow").style.display = "none";
+  document.getElementById("completeRow").style.display = "none";
+  document.getElementById("convoStatus").textContent = "";
+};
+
+function raw(data) {
+  document.getElementById("rawOutput").textContent = JSON.stringify(data, null, 2);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Anaphora-User-Id": userId,
+      ...(opts.headers || {}),
+    },
+  });
+  const data = await res.json();
+  raw(data);
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+// --- Conversation ---
+let conversationId = null;
+let chatHistory = [];        // {role, text} — tracked for export
+let lastDiscoveryResult = null;  // {insight_text, new_signals, readiness_pct} — tracked for export
+
+function addMsg(role, text) {
+  chatHistory.push({ role, text });
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text;
+  document.getElementById("chat").appendChild(div);
+  document.getElementById("chat").scrollTop = 999999;
+}
+
+document.getElementById("startBtn").onclick = async () => {
+  const data = await api("/conversation/start", { method: "POST" });
+  conversationId = data.conversation_id;
+  addMsg("assistant", data.message);
+  document.getElementById("startRow").style.display = "none";
+  document.getElementById("messageRow").style.display = "flex";
+  document.getElementById("convoStatus").textContent = "turn_count: 0 · ready_to_complete: false";
+};
+
+document.getElementById("sendBtn").onclick = async () => {
+  const input = document.getElementById("messageInput");
+  const text = input.value.trim();
+  if (!text || !conversationId) return;
+  addMsg("user", text);
+  input.value = "";
+  const data = await api("/conversation/message", {
+    method: "POST",
+    body: JSON.stringify({ conversation_id: conversationId, message: text }),
+  });
+  addMsg("assistant", data.reply);
+  document.getElementById("convoStatus").textContent =
+    `turn_count: ${data.turn_count} · ready_to_complete: ${data.ready_to_complete}`;
+  document.getElementById("completeRow").style.display = data.ready_to_complete ? "block" : "none";
+};
+document.getElementById("messageInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("sendBtn").click();
+});
+
+document.getElementById("completeBtn").onclick = async () => {
+  const data = await api("/conversation/complete", {
+    method: "POST",
+    body: JSON.stringify({ conversation_id: conversationId }),
+  });
+  document.getElementById("convoStatus").textContent =
+    `Completed — ${data.signals.length} signals extracted, readiness now ${data.readiness_pct}%`;
+  renderBlueprint(data.signals);
+  renderReadinessValue(data.readiness_pct);
+};
+
+// --- Blueprint ---
+function renderBlueprint(signals) {
+  const el = document.getElementById("blueprintList");
+  if (!signals.length) { el.innerHTML = "<div class='status'>No signals yet.</div>"; return; }
+  el.innerHTML = signals.map(s => `
+    <div class="signal">
+      <div>
+        <span class="tag">${s.perspective} · ${s.category} · ${s.strength}</span><br/>
+        <strong>${s.label}</strong>
+        ${s.evidence_text ? `<div class="status">"${s.evidence_text}"</div>` : ""}
+      </div>
+    </div>
+  `).join("");
+}
+
+document.getElementById("loadBlueprintBtn").onclick = async () => {
+  const data = await api("/blueprint");
+  renderBlueprint(data);
+};
+
+// --- Readiness ---
+function renderReadinessValue(pct) {
+  document.getElementById("readinessPct").textContent = pct + "% ready";
+  document.getElementById("readinessFill").style.width = pct + "%";
+}
+
+document.getElementById("loadReadinessBtn").onclick = async () => {
+  const data = await api("/readiness");
+  renderReadinessValue(data.readiness_pct);
+  const bd = document.getElementById("readinessBreakdown");
+  bd.innerHTML = Object.entries(data.breakdown).map(([key, v]) => `
+    <div class="breakdown-row">
+      <span>${key.replace(/_/g, " ")} (${v.weight}%)</span>
+      <span class="${v.met ? 'met-yes' : 'met-no'}">${v.met ? "met" : "not yet"}</span>
+    </div>
+  `).join("");
+};
+
+// --- Discovery ---
+let discoveryQuestions = [];
+
+document.getElementById("loadDiscoveryBtn").onclick = async () => {
+  const res = await fetch(API + "/discovery/life_you_are_building");
+  const data = await res.json();
+  raw(data);
+  discoveryQuestions = data.questions;
+  const form = document.getElementById("discoveryForm");
+  form.innerHTML = discoveryQuestions.map(q => {
+    if (q.options) {
+      return `<div class="discovery-q">
+        <div class="prompt">${q.prompt}</div>
+        ${q.options.map(o => `
+          <label><input type="radio" name="${q.id}" value="${o.id}" /> ${o.label}</label>
+        `).join("")}
+      </div>`;
+    }
+    if (q.spectrum) {
+      return `<div class="discovery-q">
+        <div class="prompt">${q.prompt}</div>
+        <label><input type="radio" name="${q.id}" value="${q.spectrum[0]}" /> ${q.spectrum[0]}</label>
+        <label><input type="radio" name="${q.id}" value="${q.spectrum[1]}" /> ${q.spectrum[1]}</label>
+      </div>`;
+    }
+    return "";
+  }).join("") + `<button id="submitDiscoveryBtn">Submit Discovery</button>`;
+
+  document.getElementById("submitDiscoveryBtn").onclick = submitDiscovery;
+};
+
+async function submitDiscovery() {
+  const body = discoveryQuestions.map(q => {
+    const checked = document.querySelector(`input[name="${q.id}"]:checked`);
+    return checked ? { user_id: userId, question_id: q.id, response: checked.value } : null;
+  }).filter(Boolean);
+
+  if (!body.length) { alert("Answer at least one question first."); return; }
+
+  const data = await api("/discovery/life_you_are_building/respond", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  lastDiscoveryResult = { answers: body, ...data };
+  document.getElementById("discoveryResult").innerHTML = `
+    <div class="insight">${data.insight_text}</div>
+  `;
+  renderReadinessValue(data.readiness_pct);
+}
+
+// --- Export ---
+document.getElementById("exportBtn").onclick = async () => {
+  const [blueprint, readiness] = await Promise.all([
+    fetch(API + "/blueprint", { headers: { "X-Anaphora-User-Id": userId } }).then(r => r.json()),
+    fetch(API + "/readiness", { headers: { "X-Anaphora-User-Id": userId } }).then(r => r.json()),
+  ]);
+
+  const exportData = {
+    exported_at: new Date().toISOString(),
+    user_id: userId,
+    conversation_id: conversationId,
+    chat_history: chatHistory,
+    blueprint_signals: blueprint,
+    readiness,
+    discovery: lastDiscoveryResult,
+  };
+
+  const text = JSON.stringify(exportData, null, 2);
+  document.getElementById("exportOutput").value = text;
+  document.getElementById("copyExportBtn").disabled = false;
+  document.getElementById("downloadExportBtn").disabled = false;
+};
+
+document.getElementById("copyExportBtn").onclick = () => {
+  const el = document.getElementById("exportOutput");
+  el.select();
+  navigator.clipboard.writeText(el.value).then(() => {
+    const btn = document.getElementById("copyExportBtn");
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+};
+
+document.getElementById("downloadExportBtn").onclick = () => {
+  const text = document.getElementById("exportOutput").value;
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `anaphora-session-${userId}-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>
