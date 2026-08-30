@@ -22,7 +22,7 @@ import { LAV, SAGE } from './theme';
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
 
 const initialState = {
-  screen: 'welcome', framed: true, mode: 'checking',
+  screen: 'welcome', framed: false, mode: 'checking',
   convoId: null, messages: [], draft: '', thinking: false,
   turnCount: 0, readyToComplete: false,
   signals: [], readiness: 0, insight: '', newSignals: [],
