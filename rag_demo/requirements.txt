@@ -1,0 +1,10 @@
+# profiles.py itself needs nothing beyond the stdlib.
+#
+# generate_personas.py, test_generation.py, and test_rag.py's use of it all
+# import from ../anaphora_backend (extract_blueprint, the Pydantic schemas,
+# settings) rather than duplicating that code — install that package's own
+# requirements first:
+#   pip install -r ../anaphora_backend/requirements.txt
+#
+# Then just this for running the test suite:
+pytest
