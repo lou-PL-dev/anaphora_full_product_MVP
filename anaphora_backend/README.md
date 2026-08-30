@@ -1,8 +1,9 @@
 # Anaphora — MVP Backend
 
 FastAPI backend for the technical MVP described in
-`Anaphora__MVP_Product_Requirements_Document.md`. Built for a Claude
-Design frontend to call directly — see "Connecting the frontend" below.
+`Anaphora__MVP_Product_Requirements_Document.md`. Paired with the React
+frontend in `../frontend/` — see "Connecting the frontend" below, and the
+repo-root README for how the two are deployed together (Render + Netlify).
 
 ## Folder structure
 ```
@@ -24,29 +25,52 @@ anaphora_backend/
 │       ├── blueprint_router.py        # /blueprint, /blueprint/signal/{id}
 │       ├── readiness_router.py         # /readiness
 │       └── discovery_router.py          # /discovery/{id}, /discovery/{id}/respond
+├── test_flow.py                        # end-to-end test of the full PRD demo scenario
+├── test_duplicate_fix.py               # regression test for the re-completion duplicate-signals bug
+├── requirements.txt
+└── README.md
+```
 
 Note: every file in `chains/` and `routers/` has a unique name across the
 whole project (e.g. `chains/conversation_chain.py` vs.
 `routers/conversation_router.py`), so downloading files individually into
 the same folder can't silently overwrite one with another.
-├── test_flow.py                        # end-to-end test of the full PRD demo scenario
-├── requirements.txt
-├── .env.example
-└── README.md
-```
 
 ## Setup
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # paste your real OPENAI_API_KEY
+cp ../.env.example ../.env   # repo-root .env — see ../.env.example; paste your real OPENAI_API_KEY
 uvicorn app.main:app --reload
 ```
 API docs (auto-generated): http://localhost:8000/docs
 
 Defaults to a local SQLite file (`anaphora.db`, created automatically on
 first run) — no database setup needed to try it. For real use, set
-`DATABASE_URL` in `.env` to a Supabase Postgres connection string; every
-model in `app/models.py` is plain SQLAlchemy and works unchanged.
+`DATABASE_URL` in `.env` to a real Postgres connection string (the
+deployed instance uses Render Postgres); every model in `app/models.py`
+is plain SQLAlchemy and works unchanged either way.
+
+Note: `Base.metadata.create_all()` only creates tables that don't already
+exist — it never alters an existing table. If you pull a change that adds
+a column (e.g. `User.blueprint_narrative`) and hit a "column does not
+exist" error against a database you'd already run before, drop and
+recreate the schema rather than just restarting: `DROP SCHEMA public
+CASCADE; CREATE SCHEMA public;` in `psql`, then restart the app.
+
+## LangSmith tracing (optional)
+Every LLM call goes through LangChain (`ChatOpenAI` in `chains/conversation_chain.py`,
+`chains/extraction_chain.py`, `chains/discovery_chain.py`), so tracing needs
+no code changes — just set these in `.env` (see `../.env.example`):
+```
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=<your LangSmith API key>
+LANGCHAIN_PROJECT=anaphora-mvp
+```
+Every conversation turn, Blueprint extraction, and Discovery insight then
+shows up as a trace in your LangSmith project — the exact prompt sent, the
+structured output returned, latency, and token cost. `rag_demo/generate_personas.py`
+runs real transcripts through `extract_blueprint` too, so it's a quick way
+to generate a batch of traces without going through the chat UI by hand.
 
 ## Verify it works without an OpenAI key
 ```bash
@@ -65,17 +89,22 @@ X-Anaphora-User-Id: <a UUID your frontend generates once and stores locally>
 ```
 No login flow — the backend upserts a `users` row on first sight of a
 given ID (see `app/auth.py` for why this is enough for an MVP per PRD
-section 5). CORS is wide open (`allow_origins=["*"]`) so a Claude Design
-preview or localhost frontend can call it without extra config — tighten
-this in `app/main.py` before anything resembling production.
+section 5). CORS is wide open (`allow_origins=["*"]`) so a localhost or
+deployed frontend can call it without extra config — tighten this in
+`app/main.py` before anything resembling production.
+
+The frontend in `../frontend/` defaults to calling the deployed Render
+backend (see `frontend/src/api.js`) — set `VITE_API_BASE` in
+`frontend/.env` to point it at `http://localhost:8000` for local dev
+against this backend instead.
 
 ## Endpoint summary
 | Endpoint | Maps to |
 |---|---|
 | `POST /conversation/start` | §6-7, opens the chat with the fixed opening prompt |
 | `POST /conversation/message` | §8-9 (Operation A), one turn of the matchmaker conversation |
-| `POST /conversation/complete` | §10-13 (Operation B), extracts + stores the Blueprint |
-| `GET /blueprint` | §14, the Blueprint review screen |
+| `POST /conversation/complete` | §10-13 (Operation B), extracts signals + a narrative portrait, stores the Blueprint |
+| `GET /blueprint` | §14, the Blueprint review screen — signals + the narrative portrait |
 | `PATCH /blueprint/signal/{id}` | §14, "Change something" |
 | `GET /readiness` | §16-17, deterministic readiness % |
 | `GET /discovery/{id}` | §4F, fetches the one MVP Discovery's questions |
