@@ -6,16 +6,19 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ExtractionResult, IdealPartnerBlueprint, MeBlueprint, SignalItem, Strength
+from app.schemas import ConversationTurnResult, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
 
 FAKE_EXTRACTION = ExtractionResult(
-    ideal_partner=IdealPartnerBlueprint(
+    ideal_partner=PerspectiveBlueprint(
         personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm")],
     ),
-    me=MeBlueprint(),
+    me=PerspectiveBlueprint(),
+    narrative="Warm.",
 )
 
-with patch("app.chains.conversation_chain.get_next_question", return_value="Tell me more?"), \
+FAKE_TURN = ConversationTurnResult(reply="Tell me more?", categories_covered=["personality"])
+
+with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
      patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION):
 
     from app.main import app
@@ -33,7 +36,7 @@ with patch("app.chains.conversation_chain.get_next_question", return_value="Tell
     print(r.status_code, len(r.json()["signals"]), "signals returned")
 
     print("--- blueprint after 1st complete ---")
-    signals = client.get("/blueprint", headers=headers).json()
+    signals = client.get("/blueprint", headers=headers).json()["signals"]
     print(len(signals), "total signals in DB")
     assert len(signals) == 1, f"expected 1 signal, got {len(signals)}"
 
@@ -51,7 +54,7 @@ with patch("app.chains.conversation_chain.get_next_question", return_value="Tell
     r = client.post("/conversation/complete", headers=headers, json={"conversation_id": convo_id_2})
     print(r.status_code, len(r.json()["signals"]), "signals returned")
 
-    signals = client.get("/blueprint", headers=headers).json()
+    signals = client.get("/blueprint", headers=headers).json()["signals"]
     print(len(signals), "total signals in DB after 2nd conversation")
     assert len(signals) == 1, f"expected still 1 signal (replaced, not appended), got {len(signals)}"
 

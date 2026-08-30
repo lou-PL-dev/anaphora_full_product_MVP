@@ -6,24 +6,37 @@
 
 // key -> [weight, label] — mirrors backend CATEGORY_WEIGHTS (readiness.py)
 export const WEIGHTS = {
-  ideal_partner_personality: [15, 'Who they are'],
-  ideal_partner_lifestyle: [15, 'How they live'],
-  relationship_needs: [15, 'What you need from a relationship'],
-  attraction: [10, 'Attraction'],
-  about_me: [15, 'About you'],
-  values: [10, 'Values'],
-  discovery_completed: [10, 'A Discovery completed'],
-  basic_matching_preferences: [10, 'Basic matching preferences'],
+  ideal_partner_personality: [10, 'Who they are'],
+  ideal_partner_lifestyle: [10, 'How they live'],
+  ideal_partner_physical_type: [10, 'What draws you'],
+  ideal_partner_relationship_dynamic: [10, 'What you need from a relationship'],
+  ideal_partner_love_language: [10, 'How they connect'],
+  ideal_partner_dealbreakers: [10, 'Dealbreakers'],
+  about_you: [10, 'About you'],
+  discovery_completed: [15, 'A Discovery completed'],
+  basic_matching_preferences: [15, 'Basic matching preferences'],
 };
 
-// [perspective, category|null, title, side]
+// The 7 base categories the conversation steers toward — mirrors
+// BASE_CATEGORIES in anaphora_backend/app/chains/conversation_chain.py.
+// Used to turn `categories_covered` from /conversation/message into a
+// real progress readout instead of a raw turn count.
+export const BASE_CATEGORIES = [
+  'personality', 'lifestyle', 'physical_type',
+  'relationship_dynamic', 'love_language', 'dealbreakers', 'about_you',
+];
+
+// [perspective, category|null, title, side] — both perspectives share the
+// same 7 categories (schemas.PerspectiveBlueprint); ME's are shown as one
+// combined "About you" section rather than 7 separate subsections.
 export const GROUP_DEFS = [
   ['IDEAL_PARTNER', 'personality', 'PERSONALITY', 'Who they are'],
   ['IDEAL_PARTNER', 'lifestyle', 'LIFESTYLE', 'How they live'],
+  ['IDEAL_PARTNER', 'physical_type', 'PHYSICAL TYPE', 'What draws you'],
   ['IDEAL_PARTNER', 'relationship_dynamic', 'RELATIONSHIP DYNAMIC', 'What you need'],
-  ['IDEAL_PARTNER', 'attraction', 'ATTRACTION', 'What draws you'],
-  ['IDEAL_PARTNER', 'values', 'VALUES', 'What matters'],
+  ['IDEAL_PARTNER', 'love_language', 'LOVE LANGUAGE', 'How they connect'],
   ['IDEAL_PARTNER', 'dealbreakers', 'DEALBREAKERS', 'Non-negotiable'],
+  ['IDEAL_PARTNER', 'values', 'VALUES', 'What matters'],
   ['ME', null, 'ABOUT YOU', 'What you revealed'],
 ];
 

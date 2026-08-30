@@ -6,9 +6,9 @@ from ..auth import get_current_user
 from ..models import User, Conversation, BlueprintSignal
 from ..schemas import (
     ConversationStartResponse, ConversationMessageRequest, ConversationMessageResponse,
-    ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut,
+    ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut, PerspectiveBlueprint,
 )
-from ..chains.conversation_chain import get_next_question, user_turn_count, is_ready_to_complete, COMPLETION_MESSAGE
+from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete, COMPLETION_MESSAGE
 from ..chains.extraction_chain import extract_blueprint
 from ..readiness import compute_readiness
 
@@ -41,17 +41,18 @@ def send_message(
     history = list(convo.messages)
     history.append({"role": "user", "content": body.message})
 
-    reply = get_next_question(history)
-    history.append({"role": "assistant", "content": reply})
+    turn = converse(history)
+    history.append({"role": "assistant", "content": turn.reply})
 
     convo.messages = history
     db.add(convo)
     db.commit()
 
     return ConversationMessageResponse(
-        reply=reply,
+        reply=turn.reply,
         turn_count=user_turn_count(history),
-        ready_to_complete=is_ready_to_complete(history),
+        ready_to_complete=is_ready_to_complete(history, turn.categories_covered),
+        categories_covered=turn.categories_covered,
     )
 
 
@@ -95,19 +96,13 @@ def complete_conversation(
             db.add(signal)
             created.append(signal)
 
-    ip = result.ideal_partner
-    _store("IDEAL_PARTNER", "personality", ip.personality)
-    _store("IDEAL_PARTNER", "lifestyle", ip.lifestyle)
-    _store("IDEAL_PARTNER", "relationship_dynamic", ip.relationship_dynamic)
-    _store("IDEAL_PARTNER", "attraction", ip.attraction)
-    _store("IDEAL_PARTNER", "values", ip.values)
-    _store("IDEAL_PARTNER", "dealbreakers", ip.dealbreakers)
+    # Both perspectives share the same 7 categories (schemas.PerspectiveBlueprint).
+    for category in PerspectiveBlueprint.model_fields:
+        _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
+        _store("ME", category, getattr(result.me, category))
 
-    me = result.me
-    _store("ME", "personality", me.personality)
-    _store("ME", "lifestyle", me.lifestyle)
-    _store("ME", "relationship_style", me.relationship_style)
-    _store("ME", "values", me.values)
+    user.blueprint_narrative = result.narrative
+    db.add(user)
 
     convo.status = "completed"
     db.add(convo)
@@ -119,5 +114,6 @@ def complete_conversation(
 
     return ConversationCompleteResponse(
         signals=[BlueprintSignalOut.model_validate(s) for s in created],
+        narrative=result.narrative,
         readiness_pct=readiness_pct,
     )

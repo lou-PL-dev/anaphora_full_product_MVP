@@ -2,8 +2,12 @@ import { useRef } from 'react';
 import { useSpeechToText } from '../useSpeechToText';
 import ErrorBanner from '../components/ErrorBanner';
 
-export default function Chat({ goHome, messages, turnCount, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft, error, onRetryStart }) {
-  const turnDots = [0, 1, 2, 3].map((i) => (i < turnCount ? '#2F4A3F' : 'rgba(47,74,63,.16)'));
+export default function Chat({ goHome, messages, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft, error, onRetryStart, categoriesCoveredCount, totalCategories }) {
+  // One dot per base field the conversation needs to cover (personality,
+  // lifestyle, physical_type, relationship_dynamic, love_language,
+  // dealbreakers, about_you) — filled in as the AI's own judgment says
+  // each one has real content, not just elapsed turns.
+  const coverageDots = Array.from({ length: totalCategories }, (_, i) => (i < categoriesCoveredCount ? '#2F4A3F' : 'rgba(47,74,63,.16)'));
 
   // Voice dictation for the draft field: on start, remember whatever was
   // already typed so speech appends to it rather than replacing it —
@@ -29,9 +33,9 @@ export default function Chat({ goHome, messages, turnCount, thinking, draft, onD
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, color: '#2F4A3F' }}>Anaphora</div>
           <div style={{ fontSize: 11, color: '#94A09A', letterSpacing: '.02em' }}>Getting to know who you're looking for</div>
         </div>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-          {turnDots.map((color, i) => (
-            <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: color }} />
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {coverageDots.map((color, i) => (
+            <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: color }} />
           ))}
         </div>
       </div>

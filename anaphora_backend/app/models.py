@@ -27,6 +27,7 @@ class User(Base):
     gender_preference = Column(String, nullable=True)
     age = Column(Integer, nullable=True)
     preferred_age_range = Column(String, nullable=True)  # e.g. "30-40"
+    blueprint_narrative = Column(Text, nullable=True)  # flowing ideal-partner portrait (schemas.ExtractionResult.narrative)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     conversations = relationship("Conversation", back_populates="user")
@@ -52,7 +53,7 @@ class BlueprintSignal(Base):
     id = Column(String, primary_key=True, default=gen_id)
     user_id = Column(String, ForeignKey("users.id"))
     perspective = Column(String)  # "ME" | "IDEAL_PARTNER"
-    category = Column(String)     # personality | lifestyle | relationship_dynamic | attraction | values | dealbreakers
+    category = Column(String)     # personality | lifestyle | physical_type | relationship_dynamic | love_language | dealbreakers | values
     dimension = Column(String, nullable=True)  # e.g. "emotional_expression" (optional, PRD sec 13)
     value = Column(String, nullable=True)      # e.g. "high" (optional, PRD sec 13)
     label = Column(String)        # e.g. "Emotionally expressive"

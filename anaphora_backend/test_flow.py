@@ -9,22 +9,28 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ExtractionResult, IdealPartnerBlueprint, MeBlueprint, SignalItem, Strength
+from app.schemas import ConversationTurnResult, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
 
 FAKE_EXTRACTION = ExtractionResult(
-    ideal_partner=IdealPartnerBlueprint(
+    ideal_partner=PerspectiveBlueprint(
         personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm and funny")],
         relationship_dynamic=[SignalItem(label="Emotionally communicative", strength=Strength.hard_requirement,
                                           evidence_text="need someone who can actually talk about things")],
-        attraction=[SignalItem(label="Dry humour", strength=Strength.preference, evidence_text="dry humour")],
+        physical_type=[SignalItem(label="Dry humour", strength=Strength.preference, evidence_text="dry humour")],
     ),
-    me=MeBlueprint(
-        relationship_style=[SignalItem(label="Values presence over drama", strength=Strength.preference,
-                                        evidence_text="doesn't make everything dramatic")],
+    me=PerspectiveBlueprint(
+        relationship_dynamic=[SignalItem(label="Values presence over drama", strength=Strength.preference,
+                                          evidence_text="doesn't make everything dramatic")],
     ),
+    narrative="Warm, funny, someone who can actually talk about things without making everything dramatic.",
 )
 
-with patch("app.chains.conversation_chain.get_next_question", return_value="What kind of humour really works for you?"), \
+FAKE_TURN = ConversationTurnResult(
+    reply="What kind of humour really works for you?",
+    categories_covered=["personality"],
+)
+
+with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
      patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION), \
      patch("app.chains.discovery_chain.synthesize_insight", return_value="You want strong roots without feeling stuck."):
 
@@ -57,7 +63,7 @@ with patch("app.chains.conversation_chain.get_next_question", return_value="What
 
     print("--- get blueprint ---")
     r = client.get("/blueprint", headers=headers)
-    print(r.status_code, len(r.json()), "signals")
+    print(r.status_code, len(r.json()["signals"]), "signals")
 
     print("--- readiness after conversation ---")
     r = client.get("/readiness", headers=headers)
@@ -80,7 +86,7 @@ with patch("app.chains.conversation_chain.get_next_question", return_value="What
     print(r.status_code, r.json())
 
     print("--- correct a signal ---")
-    signals = client.get("/blueprint", headers=headers).json()
+    signals = client.get("/blueprint", headers=headers).json()["signals"]
     sig_id = signals[0]["id"]
     r = client.patch(f"/blueprint/signal/{sig_id}", headers=headers, json={"label": "Corrected label"})
     print(r.status_code, r.json())

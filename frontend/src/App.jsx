@@ -16,7 +16,7 @@ import Friends from './screens/Friends';
 import Profile from './screens/Profile';
 import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT } from './api';
 import { mockReadiness } from './readiness';
-import { GROUP_DEFS, STRENGTHS, STRENGTH_STYLE } from './data';
+import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE } from './data';
 import { LAV, SAGE } from './theme';
 
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
@@ -24,8 +24,8 @@ const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
 const initialState = {
   screen: 'welcome', framed: false, mode: 'checking',
   convoId: null, messages: [], draft: '', thinking: false,
-  turnCount: 0, readyToComplete: false,
-  signals: [], readiness: 0, insight: '', newSignals: [],
+  turnCount: 0, readyToComplete: false, categoriesCovered: [],
+  signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
   questions: [], dqIdx: 0, answers: {},
   discoveryDone: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
@@ -71,7 +71,7 @@ export default function App() {
   const go = (screen) => () => patch({ screen, whyOpen: false, error: null });
 
   const beginConversation = async () => {
-    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, convoId: null, error: null });
+    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, error: null });
     const r = await api('POST', '/conversation/start');
     if (r) {
       patch({ convoId: r.conversation_id, messages: [{ role: 'assistant', content: r.message }] });
@@ -95,7 +95,10 @@ export default function App() {
     patch((prev) => ({ messages: prev.messages.concat([{ role: 'user', content: text }]), draft: '', thinking: true, error: null }));
     const r = await api('POST', '/conversation/message', { conversation_id: s.convoId, message: text }, TIMEOUT_CHAT_REPLY);
     if (r) {
-      patch((prev) => ({ thinking: false, messages: prev.messages.concat([{ role: 'assistant', content: r.reply }]), readyToComplete: r.ready_to_complete, turnCount: r.turn_count }));
+      patch((prev) => ({
+        thinking: false, messages: prev.messages.concat([{ role: 'assistant', content: r.reply }]),
+        readyToComplete: r.ready_to_complete, turnCount: r.turn_count, categoriesCovered: r.categories_covered,
+      }));
     } else {
       // Roll back the optimistic bubble — the backend never actually saw
       // this turn — and hand the text back to the draft box so retrying is
@@ -113,7 +116,7 @@ export default function App() {
     patch({ error: null });
     const r = await api('POST', '/conversation/complete', { conversation_id: s.convoId }, TIMEOUT_EXTRACTION);
     if (r) {
-      patch({ signals: r.signals, readiness: r.readiness_pct, convoCompleted: true, screen: 'enough' });
+      patch({ signals: r.signals, narrative: r.narrative, readiness: r.readiness_pct, convoCompleted: true, screen: 'enough' });
     } else {
       patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap “Create my Blueprint” to try again." } });
     }
@@ -176,9 +179,9 @@ export default function App() {
   const pickGender = (v) => patch((prev) => ({ gender: v, readiness: prev.mode === 'live' ? prev.readiness : mockReadiness(prev.signals, prev.discoveryDone, v).total }));
   const onAge = (e) => patch({ ageMax: Number(e.target.value) });
   const resetAll = () => patch({
-    screen: 'welcome', messages: [], signals: [], readiness: 0, insight: '', newSignals: [],
+    screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
     answers: {}, dqIdx: 0, discoveryDone: false, convoCompleted: false, turnCount: 0,
-    readyToComplete: false, gender: null,
+    readyToComplete: false, categoriesCovered: [], gender: null,
   });
 
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
@@ -259,7 +262,8 @@ export default function App() {
     case 'chat':
       screenEl = (
         <Chat
-          goHome={go('home')} messages={s.messages} turnCount={s.turnCount} thinking={s.thinking}
+          goHome={go('home')} messages={s.messages} thinking={s.thinking}
+          categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length}
           draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage}
           readyToComplete={s.readyToComplete} completeConversation={completeConversation} chatEndRef={chatEndRef}
           setDraft={setDraft}
@@ -272,7 +276,7 @@ export default function App() {
       screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} groups={groups} />;
       break;
     case 'blueprint':
-      screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} />;
+      screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />;
       break;
     case 'home':
       screenEl = (

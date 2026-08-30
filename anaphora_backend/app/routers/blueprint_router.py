@@ -4,15 +4,18 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..auth import get_current_user
 from ..models import User, BlueprintSignal
-from ..schemas import BlueprintSignalOut, SignalCorrectionRequest
+from ..schemas import BlueprintResponse, BlueprintSignalOut, SignalCorrectionRequest
 
 router = APIRouter(prefix="/blueprint", tags=["blueprint"])
 
 
-@router.get("", response_model=list[BlueprintSignalOut])
+@router.get("", response_model=BlueprintResponse)
 def get_blueprint(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
-    return [BlueprintSignalOut.model_validate(s) for s in signals]
+    return BlueprintResponse(
+        signals=[BlueprintSignalOut.model_validate(s) for s in signals],
+        narrative=user.blueprint_narrative,
+    )
 
 
 @router.patch("/signal/{signal_id}", response_model=BlueprintSignalOut)

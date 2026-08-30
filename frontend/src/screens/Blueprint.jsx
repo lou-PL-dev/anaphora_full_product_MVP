@@ -1,4 +1,4 @@
-export default function Blueprint({ goHome, groups, signalCount }) {
+export default function Blueprint({ goHome, groups, signalCount, narrative }) {
   return (
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
       <div style={{ padding: '62px 22px 18px', background: 'linear-gradient(160deg, #F2EDE6, #FBF9F6)' }}>
@@ -9,6 +9,13 @@ export default function Blueprint({ goHome, groups, signalCount }) {
         <div style={{ marginTop: 14, fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.2, color: '#2F4A3F' }}>What I understood<br />about you</div>
         <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>{signalCount} signals, drawn from your own words. Tap anything that isn't quite right.</div>
       </div>
+
+      {narrative && (
+        <div style={{ margin: '4px 22px 22px', padding: '22px 22px 24px', borderRadius: 22, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)', boxShadow: '0 8px 26px rgba(47,74,63,.05)' }}>
+          <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#8C7FBE' }}>THE PERSON I'M PICTURING</div>
+          <div style={{ marginTop: 12, fontFamily: "'Playfair Display', serif", fontSize: 15.5, lineHeight: 1.75, color: '#2F4A3F', whiteSpace: 'pre-wrap' }}>{narrative}</div>
+        </div>
+      )}
 
       <div style={{ padding: '4px 22px 24px', display: 'flex', flexDirection: 'column', gap: 26 }}>
         {groups.map((g) => (
