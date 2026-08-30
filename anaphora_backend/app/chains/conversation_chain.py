@@ -10,17 +10,13 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from ..config import settings
-from ..schemas import ConversationTurnResult
+from ..schemas import BaseCategory, ConversationTurnResult
 
-# The 7 base fields a Blueprint needs before it's ready to build. Six mirror
-# the structured-extraction categories (schemas.py::PerspectiveBlueprint,
-# minus "values" — that one's real and extractable but not gating); the
-# 7th, "about_you", just means *something* about the user themselves has
-# come up — it doesn't need its own 7-way breakdown to count as covered.
-BASE_CATEGORIES = [
-    "personality", "lifestyle", "physical_type",
-    "relationship_dynamic", "love_language", "dealbreakers", "about_you",
-]
+# The 7 base fields a Blueprint needs before it's ready to build — see
+# schemas.BaseCategory for why this is a real Enum rather than a free-text
+# list (label drift in an LLM's own free-text output would otherwise let
+# one mismatched category permanently block completion).
+BASE_CATEGORIES = list(BaseCategory)
 
 SYSTEM_PROMPT = """You are Anaphora, a thoughtful, warm AI matchmaker having a natural \
 conversation with someone about the person they'd love to meet.
@@ -48,6 +44,11 @@ one of them — naturally, as a matchmaker genuinely curious about that side of 
 a checklist item ("I still need to ask about X")."""
 
 MINIMUM_USER_TURNS = 3
+# Hard ceiling so the conversation can never trap someone indefinitely if
+# coverage judgment stalls on one field (e.g. a user who just won't
+# volunteer a dealbreaker) — completion becomes forced once this many
+# turns have happened, whatever categories_covered says.
+MAXIMUM_USER_TURNS = 12
 COMPLETION_MESSAGE = (
     "I think I'm starting to understand who you're looking for. "
     "I've got enough to create your first Relationship Blueprint. "
@@ -68,30 +69,27 @@ def _to_langchain_messages(history: list[dict]) -> list:
 def converse(history: list[dict]) -> ConversationTurnResult:
     """history = full message list so far, INCLUDING the latest user turn.
     One structured-output call returns both the natural reply and the
-    model's own judgment of which BASE_CATEGORIES are covered by the
-    conversation so far (cumulative — re-derived from the full transcript
-    each turn, not tracked incrementally, so there's no extra state to
-    persist between turns)."""
+    model's own judgment of which BASE_CATEGORIES are covered (cumulative —
+    re-derived from the full transcript each turn, not tracked
+    incrementally, so there's no extra state to persist between turns)."""
     llm = ChatOpenAI(model=settings.openai_model, temperature=0.7, api_key=settings.openai_api_key)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
-    result = structured_llm.invoke(_to_langchain_messages(history))
-    # Defensive: only trust category names we actually asked about — an
-    # LLM inventing a slightly different label shouldn't silently make the
-    # gate impossible to satisfy, so ignore anything unrecognized rather
-    # than either crashing or letting it count.
-    result.categories_covered = [c for c in result.categories_covered if c in BASE_CATEGORIES]
-    return result
+    return structured_llm.invoke(_to_langchain_messages(history))
 
 
 def user_turn_count(history: list[dict]) -> int:
     return sum(1 for m in history if m["role"] == "user")
 
 
-def is_ready_to_complete(history: list[dict], categories_covered: list[str]) -> bool:
+def is_ready_to_complete(history: list[dict], categories_covered: list) -> bool:
     """Ready once every base category has been covered AND a small minimum
-    of turns have happened — the turn floor exists only so one very long
-    first message can't claim full coverage before the conversation feels
-    like an actual back-and-forth."""
-    if user_turn_count(history) < MINIMUM_USER_TURNS:
+    of turns have happened (so one very long first message can't claim
+    full coverage before the conversation feels like an actual
+    back-and-forth) — or once MAXIMUM_USER_TURNS is hit regardless, so a
+    single stubborn category can't trap the conversation forever."""
+    turns = user_turn_count(history)
+    if turns >= MAXIMUM_USER_TURNS:
+        return True
+    if turns < MINIMUM_USER_TURNS:
         return False
     return set(BASE_CATEGORIES) <= set(categories_covered)

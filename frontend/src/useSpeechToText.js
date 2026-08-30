@@ -23,6 +23,11 @@ export function useSpeechToText({ onTranscript, lang = 'en-US' } = {}) {
   // already committed makes a repeat firing a no-op instead.
   const finalTranscriptRef = useRef('');
   const lastFinalIndexRef = useRef(-1);
+  // stop() asks the engine to wind down, but it can still fire one more
+  // onresult for audio already in flight before onend lands — without this
+  // guard that trailing event would report the old session's transcript
+  // again right after a caller (e.g. sendMessage) has already cleared it.
+  const stoppingRef = useRef(false);
 
   // A fresh SpeechRecognition instance per listening session, created only
   // in start() rather than once and reused — some browsers don't reliably
@@ -40,7 +45,9 @@ export function useSpeechToText({ onTranscript, lang = 'en-US' } = {}) {
     recognition.lang = lang;
     finalTranscriptRef.current = '';
     lastFinalIndexRef.current = -1;
+    stoppingRef.current = false;
     recognition.onresult = (e) => {
+      if (stoppingRef.current) return;
       let interim = '';
       // Only walk the results the browser flagged as new/changed since the
       // last event (resultIndex) — not the whole list from 0 every time.
@@ -66,6 +73,7 @@ export function useSpeechToText({ onTranscript, lang = 'en-US' } = {}) {
   };
   const stop = () => {
     if (!listening) return;
+    stoppingRef.current = true;
     recognitionRef.current?.stop();
     setListening(false);
   };

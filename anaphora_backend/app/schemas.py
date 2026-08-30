@@ -17,6 +17,23 @@ class Strength(str, Enum):
     unknown = "unknown"
 
 
+class BaseCategory(str, Enum):
+    """The 7 base fields a Blueprint needs before a conversation can
+    complete — see BASE_CATEGORIES / is_ready_to_complete in
+    chains/conversation_chain.py. A real Enum here (not a free-text list[str]
+    with a description) matters: with_structured_output constrains the
+    LLM's JSON schema to exactly these values, so a label typo or synonym
+    can't silently fail to match and permanently block a category from
+    ever counting as covered."""
+    personality = "personality"
+    lifestyle = "lifestyle"
+    physical_type = "physical_type"
+    relationship_dynamic = "relationship_dynamic"
+    love_language = "love_language"
+    dealbreakers = "dealbreakers"
+    about_you = "about_you"
+
+
 # --- LLM structured-extraction output (Operation B) -------------------------
 
 # The same 7 categories apply to BOTH perspectives — what the user wants in
@@ -69,20 +86,19 @@ class ConversationMessageResponse(BaseModel):
     reply: str
     turn_count: int
     ready_to_complete: bool
-    categories_covered: list[str]
+    categories_covered: list[BaseCategory]
 
 
 class ConversationTurnResult(BaseModel):
     """Target schema for the conversational LLM's structured output — one
     call returns both its natural reply AND its own judgment of which base
-    categories (BASE_CATEGORIES in conversation_chain.py) are now covered
-    by the conversation so far, so the completion gate doesn't need a
-    second LLM call to track coverage turn by turn."""
+    categories are now covered by the conversation so far, so the
+    completion gate doesn't need a second LLM call to track coverage turn
+    by turn."""
     reply: str = Field(description="The natural, conversational reply — one or two sentences, then the next question")
-    categories_covered: list[str] = Field(
-        description="Which of the base categories (personality, lifestyle, physical_type, "
-        "relationship_dynamic, love_language, dealbreakers, about_you) have enough "
-        "information so far, judged over the WHOLE conversation, not just this turn"
+    categories_covered: list[BaseCategory] = Field(
+        description="Which base categories have enough information so far, judged "
+        "over the WHOLE conversation, not just this turn"
     )
 
 

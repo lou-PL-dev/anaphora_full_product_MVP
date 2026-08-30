@@ -14,7 +14,7 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
   // onTranscript fires with the FULL transcript of the current listening
   // session each time (interim results included), not just the new words.
   const baseDraftRef = useRef('');
-  const { listening, supported: voiceSupported, toggle: toggleVoice } = useSpeechToText({
+  const { listening, supported: voiceSupported, toggle: toggleVoice, stop: stopVoice } = useSpeechToText({
     onTranscript: (transcript) => {
       const base = baseDraftRef.current;
       setDraft(base ? base + ' ' + transcript : transcript);
@@ -23,6 +23,18 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
   const handleMicClick = () => {
     if (!listening) baseDraftRef.current = draft.trim();
     toggleVoice();
+  };
+  // A still-listening mic keeps overwriting the draft field after it's
+  // been cleared (its accumulated transcript is only reset on the next
+  // start(), not on send) — stop it first so sending doesn't get clobbered
+  // by leftover speech a moment later.
+  const handleSend = () => {
+    if (listening) stopVoice();
+    sendMessage();
+  };
+  const handleDraftKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && listening) stopVoice();
+    onDraftKey(e);
   };
 
   return (
@@ -85,7 +97,7 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
         <textarea
           value={draft}
           onChange={onDraft}
-          onKeyDown={onDraftKey}
+          onKeyDown={handleDraftKey}
           rows={1}
           placeholder={listening ? 'Listening…' : 'Type your answer…'}
           style={{ flex: 1, resize: 'none', padding: '13px 16px', borderRadius: 22, border: `1px solid ${listening ? '#A69ACD' : 'rgba(47,74,63,.14)'}`, background: '#FFFFFF', fontSize: 14, lineHeight: 1.5, color: '#2F4A3F', maxHeight: 96, outline: 'none', transition: 'border-color .2s' }}
@@ -110,7 +122,7 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
             </svg>
           </button>
         )}
-        <button onClick={sendMessage} style={{ flex: 'none', width: 46, height: 46, borderRadius: '50%', border: 'none', background: '#2F4A3F', color: '#F2EDE6', fontSize: 16, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>↑</button>
+        <button onClick={handleSend} style={{ flex: 'none', width: 46, height: 46, borderRadius: '50%', border: 'none', background: '#2F4A3F', color: '#F2EDE6', fontSize: 16, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>↑</button>
       </div>
     </div>
   );
