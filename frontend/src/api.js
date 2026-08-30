@@ -11,11 +11,15 @@ export const API_BASE = import.meta.env.VITE_API_BASE || 'https://anaphora-app.o
 
 // Different endpoints need very different timeouts. A plain CRUD call
 // (start a conversation, patch a signal, fetch the discovery structure) is
-// fast. A conversational turn is one LLM completion. Extraction
+// normally fast, but any of these can be the FIRST request of a session —
+// and the deployed backend (Render free tier) spins down after ~15 minutes
+// idle and takes up to ~50s to wake back up on the next request. A short
+// timeout here would misreport a waking-up backend as offline. A
+// conversational turn is one LLM completion. Extraction
 // (/conversation/complete) asks the LLM for STRUCTURED output across 10
 // categories at once — noticeably slower than a normal chat reply — and
 // needs the most headroom.
-export const TIMEOUT_QUICK = 8000;
+export const TIMEOUT_QUICK = 45000;
 export const TIMEOUT_CHAT_REPLY = 20000;
 export const TIMEOUT_INSIGHT = 20000;
 export const TIMEOUT_EXTRACTION = 45000;
@@ -34,7 +38,8 @@ export function getOrCreateUserId() {
 
 /**
  * Returns the parsed JSON body on success, or null on any failure (network
- * error, timeout, non-2xx) so callers can fall back to demo data.
+ * error, timeout, non-2xx) — callers surface a real error rather than
+ * substituting fabricated content (see App.jsx).
  */
 export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QUICK) {
   const ctrl = new AbortController();
