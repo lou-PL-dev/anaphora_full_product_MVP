@@ -71,6 +71,7 @@ export default function App() {
   };
 
   const onDraft = (e) => patch({ draft: e.target.value });
+  const setDraft = (text) => patch({ draft: text });
   const onDraftKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
 
   const sendMessage = async () => {
@@ -238,6 +239,7 @@ export default function App() {
           goHome={go('home')} messages={s.messages} turnCount={s.turnCount} thinking={s.thinking}
           draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage}
           readyToComplete={s.readyToComplete} completeConversation={completeConversation} chatEndRef={chatEndRef}
+          setDraft={setDraft}
         />
       );
       break;

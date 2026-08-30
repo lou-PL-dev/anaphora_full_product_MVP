@@ -1,5 +1,24 @@
-export default function Chat({ goHome, messages, turnCount, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef }) {
+import { useRef } from 'react';
+import { useSpeechToText } from '../useSpeechToText';
+
+export default function Chat({ goHome, messages, turnCount, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft }) {
   const turnDots = [0, 1, 2, 3].map((i) => (i < turnCount ? '#2F4A3F' : 'rgba(47,74,63,.16)'));
+
+  // Voice dictation for the draft field: on start, remember whatever was
+  // already typed so speech appends to it rather than replacing it —
+  // onTranscript fires with the FULL transcript of the current listening
+  // session each time (interim results included), not just the new words.
+  const baseDraftRef = useRef('');
+  const { listening, supported: voiceSupported, toggle: toggleVoice } = useSpeechToText({
+    onTranscript: (transcript) => {
+      const base = baseDraftRef.current;
+      setDraft(base ? base + ' ' + transcript : transcript);
+    },
+  });
+  const handleMicClick = () => {
+    if (!listening) baseDraftRef.current = draft.trim();
+    toggleVoice();
+  };
 
   return (
     <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#FBF9F6' }}>
@@ -61,9 +80,29 @@ export default function Chat({ goHome, messages, turnCount, thinking, draft, onD
           onChange={onDraft}
           onKeyDown={onDraftKey}
           rows={1}
-          placeholder="Type your answer…"
-          style={{ flex: 1, resize: 'none', padding: '13px 16px', borderRadius: 22, border: '1px solid rgba(47,74,63,.14)', background: '#FFFFFF', fontSize: 14, lineHeight: 1.5, color: '#2F4A3F', maxHeight: 96, outline: 'none' }}
+          placeholder={listening ? 'Listening…' : 'Type your answer…'}
+          style={{ flex: 1, resize: 'none', padding: '13px 16px', borderRadius: 22, border: `1px solid ${listening ? '#A69ACD' : 'rgba(47,74,63,.14)'}`, background: '#FFFFFF', fontSize: 14, lineHeight: 1.5, color: '#2F4A3F', maxHeight: 96, outline: 'none', transition: 'border-color .2s' }}
         />
+        {voiceSupported && (
+          <button
+            onClick={handleMicClick}
+            title={listening ? 'Stop dictation' : 'Describe it out loud'}
+            style={{
+              flex: 'none', width: 46, height: 46, borderRadius: '50%',
+              border: listening ? 'none' : '1px solid rgba(47,74,63,.14)',
+              background: listening ? '#A69ACD' : '#FFFFFF',
+              color: listening ? '#FFFFFF' : '#5C6B62',
+              cursor: 'pointer', display: 'grid', placeItems: 'center',
+              animation: listening ? 'apPulse 1.4s ease-out infinite' : 'none',
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+              <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" />
+              <path d="M19 11a7 7 0 0 1-14 0" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+        )}
         <button onClick={sendMessage} style={{ flex: 'none', width: 46, height: 46, borderRadius: '50%', border: 'none', background: '#2F4A3F', color: '#F2EDE6', fontSize: 16, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>↑</button>
       </div>
     </div>
