@@ -153,17 +153,20 @@ def offline_narrative(trait_profile: dict) -> str:
 # Maps an ExtractionResult (anaphora_backend/app/schemas.py) into the flat
 # Signal list profiles.py uses — the SAME (perspective, category) mapping
 # anaphora_backend/app/routers/conversation_router.py::complete_conversation
-# applies when storing a real conversation's extraction.
-_IDEAL_PARTNER_CATEGORIES = ["personality", "lifestyle", "relationship_dynamic", "attraction", "values", "dealbreakers"]
-_ME_CATEGORIES = ["personality", "lifestyle", "relationship_style", "values"]
-
-
+# applies when storing a real conversation's extraction. Categories are read
+# from PerspectiveBlueprint's own fields (both perspectives share the same
+# 7) rather than hardcoded here a second time — that duplication is exactly
+# what let this go stale after the schema was renamed (attraction ->
+# physical_type, relationship_style -> relationship_dynamic, ME gaining
+# physical_type/love_language/dealbreakers) without this file being updated
+# to match.
 def extraction_result_to_signals(result) -> list[Signal]:
+    from app.schemas import PerspectiveBlueprint
+
     signals: list[Signal] = []
-    for category in _IDEAL_PARTNER_CATEGORIES:
+    for category in PerspectiveBlueprint.model_fields:
         for item in getattr(result.ideal_partner, category):
             signals.append(Signal("IDEAL_PARTNER", category, item.label, item.strength.value, item.evidence_text))
-    for category in _ME_CATEGORIES:
         for item in getattr(result.me, category):
             signals.append(Signal("ME", category, item.label, item.strength.value, item.evidence_text))
     return signals

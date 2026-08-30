@@ -123,14 +123,15 @@ def test_build_narrative_prompt_carries_style_seeds_not_content():
 
 
 def test_extraction_result_to_signals_shape():
-    from app.schemas import ExtractionResult, IdealPartnerBlueprint, MeBlueprint, SignalItem, Strength
+    from app.schemas import ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
 
     result = ExtractionResult(
-        ideal_partner=IdealPartnerBlueprint(
+        ideal_partner=PerspectiveBlueprint(
             personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="checks in")],
             dealbreakers=[SignalItem(label="No smoking", strength=Strength.hard_requirement)],
         ),
-        me=MeBlueprint(values=[SignalItem(label="Growth", strength=Strength.preference)]),
+        me=PerspectiveBlueprint(values=[SignalItem(label="Growth", strength=Strength.preference)]),
+        narrative="Warm, and won't budge on smoking.",
     )
     signals = extraction_result_to_signals(result)
     assert len(signals) == 3

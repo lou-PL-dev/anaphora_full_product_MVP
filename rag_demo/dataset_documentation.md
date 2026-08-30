@@ -25,7 +25,7 @@ Every persona is `{id, narrative, signals[]}`. Each signal is:
 | field | type | notes |
 |---|---|---|
 | `perspective` | `"ME"` \| `"IDEAL_PARTNER"` | matches `anaphora_backend/app/models.py::BlueprintSignal.perspective` |
-| `category` | string | `personality`/`lifestyle`/`relationship_dynamic`/`attraction`/`values`/`dealbreakers` for IDEAL_PARTNER; `personality`/`lifestyle`/`relationship_style`/`values` for ME |
+| `category` | string | `personality`/`lifestyle`/`physical_type`/`relationship_dynamic`/`love_language`/`dealbreakers`/`values` — same 7 categories for both IDEAL_PARTNER and ME (`anaphora_backend/app/schemas.py::PerspectiveBlueprint`) |
 | `label` | string | short human-readable trait description |
 | `strength` | `"hard_requirement"` \| `"strong_preference"` \| `"preference"` \| `"unknown"` | matches `anaphora_backend/app/schemas.py::Strength` |
 | `evidence_text` | string \| null | short supporting quote from the narrative, when extracted (baseline generator leaves this null) |

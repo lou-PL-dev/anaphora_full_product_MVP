@@ -53,10 +53,15 @@ CANDIDATE_LABELS: dict[tuple[str, str], list[str]] = {
         "Wants to build a life together, not just date", "Gives each other space",
         "Handles conflict by talking it through", "Plans a future together early",
     ],
-    ("IDEAL_PARTNER", "attraction"): [
+    ("IDEAL_PARTNER", "physical_type"): [
         "An easy laugh, expressive eyes", "Well-groomed and put together",
         "Athletic build", "Soft-spoken voice", "Confident posture",
         "Dresses with personality", "Warm smile that reaches the eyes",
+    ],
+    ("IDEAL_PARTNER", "love_language"): [
+        "Shows love through small daily gestures", "Words of affirmation matter to them",
+        "Physical affection — always in reach for a hug", "Acts of service — just does the thing",
+        "Quality time over gifts", "Remembers the little things you mentioned once",
     ],
     ("IDEAL_PARTNER", "values"): [
         "Family matters to them", "Honest, even when it costs something",
@@ -79,9 +84,24 @@ CANDIDATE_LABELS: dict[tuple[str, str], list[str]] = {
         "Recently moved to a new city", "Big on routine",
         "Splits time between two cities", "Very close with family nearby",
     ],
-    ("ME", "relationship_style"): [
+    ("ME", "physical_type"): [
+        "Drawn to warm, expressive faces", "Prefers a similar energy level to their own",
+        "Not fussed about height", "Likes someone who dresses with intention",
+        "Athletic types catch their eye",
+    ],
+    ("ME", "relationship_dynamic"): [
         "Needs depth early on", "Takes things slow", "Direct about needs",
         "Prone to overthinking a new relationship", "Values a lot of independence",
+    ],
+    ("ME", "love_language"): [
+        "Shows care through acts of service", "Needs words of affirmation to feel secure",
+        "Physical touch is how they connect", "Quality time matters more than gifts",
+        "Shows love by remembering small details",
+    ],
+    ("ME", "dealbreakers"): [
+        "Won't relocate away from family", "Not willing to date casually",
+        "Can't compromise on wanting kids", "Won't put up with dishonesty",
+        "Needs alone time, non-negotiably",
     ],
     ("ME", "values"): [
         "Personal growth", "Financial stability", "Creative expression",
