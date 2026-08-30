@@ -1,10 +1,13 @@
 // Talks to the FastAPI backend (anaphora_backend). Every request carries the
 // anonymous per-device identity header the backend expects (see
-// anaphora_backend/app/auth.py) and fails soft — callers fall back to demo
-// data when the backend is unreachable, exactly like the Claude Design
-// prototype this was built from.
-
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+// anaphora_backend/app/auth.py). A failed call returns null — callers
+// surface a real error rather than substituting fabricated content (see
+// App.jsx).
+//
+// Defaults to the deployed Render backend so the Netlify build works with
+// no env var configured. Override with VITE_API_BASE for local dev against
+// `uvicorn app.main:app --reload` (defaults to :8000) — see .env.example.
+export const API_BASE = import.meta.env.VITE_API_BASE || 'https://anaphora-app.onrender.com';
 
 // Different endpoints need very different timeouts. A plain CRUD call
 // (start a conversation, patch a signal, fetch the discovery structure) is
