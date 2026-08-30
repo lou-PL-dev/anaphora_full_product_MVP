@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { useSpeechToText } from '../useSpeechToText';
+import ErrorBanner from '../components/ErrorBanner';
 
-export default function Chat({ goHome, messages, turnCount, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft }) {
+export default function Chat({ goHome, messages, turnCount, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft, error, onRetryStart }) {
   const turnDots = [0, 1, 2, 3].map((i) => (i < turnCount ? '#2F4A3F' : 'rgba(47,74,63,.16)'));
 
   // Voice dictation for the draft field: on start, remember whatever was
@@ -73,6 +74,8 @@ export default function Chat({ goHome, messages, turnCount, thinking, draft, onD
           </button>
         </div>
       )}
+
+      <ErrorBanner message={error} onRetry={onRetryStart} />
 
       <div style={{ padding: '10px 16px 18px', borderTop: '1px solid rgba(47,74,63,.07)', display: 'flex', gap: 10, alignItems: 'flex-end', background: '#FBF9F6' }}>
         <textarea

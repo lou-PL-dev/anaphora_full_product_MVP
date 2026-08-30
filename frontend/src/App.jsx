@@ -14,9 +14,9 @@ import Insight from './screens/Insight';
 import Matches from './screens/Matches';
 import Friends from './screens/Friends';
 import Profile from './screens/Profile';
-import { apiCall, getOrCreateUserId } from './api';
+import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT } from './api';
 import { mockReadiness } from './readiness';
-import { FALLBACK_QUESTIONS, GROUP_DEFS, MOCK_REPLIES, MOCK_SIGNALS, STRENGTHS, STRENGTH_STYLE } from './data';
+import { GROUP_DEFS, STRENGTHS, STRENGTH_STYLE } from './data';
 import { LAV, SAGE } from './theme';
 
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
@@ -26,11 +26,15 @@ const initialState = {
   convoId: null, messages: [], draft: '', thinking: false,
   turnCount: 0, readyToComplete: false,
   signals: [], readiness: 0, insight: '', newSignals: [],
-  questions: FALLBACK_QUESTIONS, dqIdx: 0, answers: {},
+  questions: [], dqIdx: 0, answers: {},
   discoveryDone: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false, whyOpen: false,
   gender: null, ageMax: 36,
+  // { screen: 'chat' | 'discovery', message: string } | null — a real
+  // backend/LLM failure, surfaced in place rather than masked with
+  // fabricated content.
+  error: null,
 };
 
 export default function App() {
@@ -39,13 +43,21 @@ export default function App() {
   const chatEndRef = useRef(null);
 
   const patch = (update) => setS((prev) => ({ ...prev, ...(typeof update === 'function' ? update(prev) : update) }));
-  const api = (method, path, body) => apiCall(uidRef.current, method, path, body);
+  // Central place that tracks real backend connectivity — `mode` reflects
+  // whichever call most recently succeeded or failed. It's just the status
+  // pill; it never decides what content to show (see the per-action error
+  // handling below, which is what actually replaced the old silent
+  // mock-data fallback).
+  const api = async (method, path, body, timeoutMs) => {
+    const r = await apiCall(uidRef.current, method, path, body, timeoutMs);
+    patch({ mode: r === null ? 'offline' : 'live' });
+    return r;
+  };
 
   useEffect(() => {
     uidRef.current = getOrCreateUserId();
     api('GET', '/discovery/life_you_are_building').then((r) => {
-      if (r && r.questions) patch({ questions: r.questions, mode: 'live' });
-      else patch({ mode: 'demo' });
+      if (r && r.questions) patch({ questions: r.questions });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -56,13 +68,16 @@ export default function App() {
   }, [s.messages, s.thinking]);
 
   // --- navigation ---
-  const go = (screen) => () => patch({ screen, whyOpen: false });
+  const go = (screen) => () => patch({ screen, whyOpen: false, error: null });
 
   const beginConversation = async () => {
-    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false });
+    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, convoId: null, error: null });
     const r = await api('POST', '/conversation/start');
-    const opening = "Tell me about the person you'd love to meet.";
-    patch({ convoId: r ? r.conversation_id : 'demo', messages: [{ role: 'assistant', content: r ? r.message : opening }] });
+    if (r) {
+      patch({ convoId: r.conversation_id, messages: [{ role: 'assistant', content: r.message }] });
+    } else {
+      patch({ error: { screen: 'chat', message: "Couldn't reach the backend to start the conversation. Check it's running, then retry." } });
+    }
   };
 
   const resumeConversation = () => {
@@ -77,25 +92,31 @@ export default function App() {
   const sendMessage = async () => {
     const text = s.draft.trim();
     if (!text || s.thinking) return;
-    const msgs = s.messages.concat([{ role: 'user', content: text }]);
-    const turns = s.turnCount + 1;
-    patch({ messages: msgs, draft: '', thinking: true, turnCount: turns });
-    const r = await api('POST', '/conversation/message', { conversation_id: s.convoId, message: text });
-    const reply = r ? r.reply : MOCK_REPLIES[Math.min(turns - 1, MOCK_REPLIES.length - 1)];
-    const ready = r ? r.ready_to_complete : turns >= 4;
-    patch((prev) => ({ thinking: false, messages: prev.messages.concat([{ role: 'assistant', content: reply }]), readyToComplete: ready, turnCount: r ? r.turn_count : turns }));
+    patch((prev) => ({ messages: prev.messages.concat([{ role: 'user', content: text }]), draft: '', thinking: true, error: null }));
+    const r = await api('POST', '/conversation/message', { conversation_id: s.convoId, message: text }, TIMEOUT_CHAT_REPLY);
+    if (r) {
+      patch((prev) => ({ thinking: false, messages: prev.messages.concat([{ role: 'assistant', content: r.reply }]), readyToComplete: r.ready_to_complete, turnCount: r.turn_count }));
+    } else {
+      // Roll back the optimistic bubble — the backend never actually saw
+      // this turn — and hand the text back to the draft box so retrying is
+      // just hitting send again.
+      patch((prev) => ({
+        thinking: false,
+        messages: prev.messages.slice(0, -1),
+        draft: text,
+        error: { screen: 'chat', message: "Anaphora didn't respond in time. Check the backend is running, then send again." },
+      }));
+    }
   };
 
   const completeConversation = async () => {
-    const r = await api('POST', '/conversation/complete', { conversation_id: s.convoId });
-    let signals, readiness;
+    patch({ error: null });
+    const r = await api('POST', '/conversation/complete', { conversation_id: s.convoId }, TIMEOUT_EXTRACTION);
     if (r) {
-      signals = r.signals; readiness = r.readiness_pct;
+      patch({ signals: r.signals, readiness: r.readiness_pct, convoCompleted: true, screen: 'enough' });
     } else {
-      signals = MOCK_SIGNALS.map((m, i) => ({ id: 'm' + i, perspective: m[0], category: m[1], label: m[2], strength: m[3], evidence_text: m[4], source: 'conversation' }));
-      readiness = mockReadiness(signals, s.discoveryDone, s.gender).total;
+      patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap “Create my Blueprint” to try again." } });
     }
-    patch({ signals, readiness, convoCompleted: true, screen: 'enough' });
   };
 
   // --- blueprint editing ---
@@ -113,7 +134,7 @@ export default function App() {
   };
 
   // --- discovery ---
-  const startDiscovery = () => patch({ screen: 'discovery', dqIdx: 0, answers: {} });
+  const startDiscovery = () => patch({ screen: 'discovery', dqIdx: 0, answers: {}, error: null });
   const discoveryBack = () => {
     if (s.dqIdx === 0) patch({ screen: 'home' });
     else patch((prev) => ({ dqIdx: prev.dqIdx - 1 }));
@@ -128,7 +149,8 @@ export default function App() {
     const { dqIdx, questions, answers } = s;
     const q = questions[dqIdx];
     if (answers[q.id] === undefined) return;
-    if (dqIdx < questions.length - 1) { patch({ dqIdx: dqIdx + 1 }); return; }
+    if (dqIdx < questions.length - 1) { patch({ dqIdx: dqIdx + 1, error: null }); return; }
+    patch({ error: null });
     const payload = questions.map((qq) => {
       const a = answers[qq.id];
       let response = String(a);
@@ -142,13 +164,11 @@ export default function App() {
       }
       return { user_id: uidRef.current, question_id: qq.id, response };
     });
-    const r = await api('POST', '/discovery/life_you_are_building/respond', payload);
+    const r = await api('POST', '/discovery/life_you_are_building/respond', payload, TIMEOUT_INSIGHT);
     if (r) {
       patch((prev) => ({ insight: r.insight_text, newSignals: r.new_signals, signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct, discoveryDone: true, screen: 'insight' }));
     } else {
-      const mockNew = payload.map((p, i) => ({ id: 'd' + i, perspective: 'ME', category: 'lifestyle', source: 'discovery', strength: 'preference', label: p.question_id === 'saturday_2032' ? 'Home-oriented, family-centered' : 'Leans toward: ' + p.response.split(' (')[0], evidence_text: null }));
-      const signals = s.signals.concat(mockNew);
-      patch({ insight: 'You want strong roots without feeling stuck.', newSignals: mockNew, signals, readiness: mockReadiness(signals, true, s.gender).total, discoveryDone: true, screen: 'insight' });
+      patch({ error: { screen: 'discovery', message: "Couldn't generate your insight — check the backend is running, then try again." } });
     }
   };
 
@@ -189,7 +209,10 @@ export default function App() {
     { key: 'friends', title: 'Ask a friend to describe you', note: '3 friends have already answered', done: true, cta: 'View', onGo: go('friends') },
   ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
 
-  const q = s.questions[s.dqIdx] || FALLBACK_QUESTIONS[0];
+  // Only a defensive placeholder for a stale render mid-navigation — the
+  // Discovery screen itself refuses to render real question UI (see
+  // discoveryUnavailable below) whenever s.questions is actually empty.
+  const q = s.questions[s.dqIdx] || { id: '_none', prompt: '', options: [] };
   const ans = s.answers[q.id];
   const isSpectrum = !!q.spectrum;
   const sv = isSpectrum ? (ans === undefined ? 50 : Number(ans)) : 50;
@@ -225,8 +248,8 @@ export default function App() {
     bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF',
   }));
 
-  const modeLabel = s.mode === 'live' ? 'Live backend' : (s.mode === 'demo' ? 'Demo data' : 'Connecting…');
-  const modeDot = s.mode === 'live' ? '#4C8C6A' : (s.mode === 'demo' ? accent : '#C9C2B8');
+  const modeLabel = s.mode === 'live' ? 'Live backend' : (s.mode === 'offline' ? 'Backend offline' : 'Connecting…');
+  const modeDot = s.mode === 'live' ? '#4C8C6A' : (s.mode === 'offline' ? '#B04A3A' : '#C9C2B8');
 
   let screenEl = null;
   switch (s.screen) {
@@ -240,6 +263,8 @@ export default function App() {
           draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage}
           readyToComplete={s.readyToComplete} completeConversation={completeConversation} chatEndRef={chatEndRef}
           setDraft={setDraft}
+          error={s.error && s.error.screen === 'chat' ? s.error.message : null}
+          onRetryStart={!s.convoId ? beginConversation : null}
         />
       );
       break;
@@ -272,6 +297,7 @@ export default function App() {
     case 'discovery':
       screenEl = (
         <Discovery
+          discoveryUnavailable={s.questions.length === 0}
           discoveryBack={discoveryBack}
           discoveryProgress={Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%'}
           discoveryCounter={(s.dqIdx + 1) + '/' + s.questions.length}
@@ -281,6 +307,7 @@ export default function App() {
           dqNextLabel={!answered ? (isSpectrum ? 'Move the slider' : 'Pick one') : (last ? 'See what I noticed' : 'Next')}
           dqNextBg={answered ? SAGE : 'rgba(47,74,63,.28)'}
           discoveryNext={discoveryNext}
+          error={s.error && s.error.screen === 'discovery' ? s.error.message : null}
         />
       );
       break;

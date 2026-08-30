@@ -1,46 +1,8 @@
-// Ported from project/Anaphora.dc.html (Claude Design export) — demo-mode
-// fallbacks and static content the prototype used when the backend is
-// unreachable, plus the fixed lookup tables the UI renders from.
-
-export const MOCK_REPLIES = [
-  "That's a good start. When you say you want someone warm — what does warmth actually look like on an ordinary Tuesday?",
-  "That lands. And how do you two spend a free weekend — is it out in the world, or slow and at home?",
-  "Noted. What's something you'd need them to care about, even if you never talked about it directly?",
-  "Last one for now: what's the thing that would make you quietly walk away, however good everything else was?",
-];
-
-// [perspective, category, label, strength, evidence_text]
-export const MOCK_SIGNALS = [
-  ['IDEAL_PARTNER', 'personality', 'Warm in small, ordinary ways', 'strong_preference', 'someone who checks in without being asked'],
-  ['IDEAL_PARTNER', 'personality', 'Self-deprecating humour', 'preference', "can laugh at themselves"],
-  ['IDEAL_PARTNER', 'personality', 'Genuinely curious', 'preference', 'asks the second question'],
-  ['IDEAL_PARTNER', 'lifestyle', 'Weekends outdoors, not out late', 'preference', 'walks, not clubs'],
-  ['IDEAL_PARTNER', 'lifestyle', 'Settled in or near a city', 'preference', null],
-  ['IDEAL_PARTNER', 'relationship_dynamic', 'Real conversation over small talk', 'hard_requirement', "I can't do surface"],
-  ['IDEAL_PARTNER', 'relationship_dynamic', 'Comfortable with independence', 'strong_preference', 'we both need our own evenings'],
-  ['IDEAL_PARTNER', 'attraction', 'An easy laugh, expressive eyes', 'preference', null],
-  ['IDEAL_PARTNER', 'values', 'Family matters to them', 'strong_preference', 'close to their people'],
-  ['IDEAL_PARTNER', 'values', 'Honest, even when it costs something', 'preference', null],
-  ['IDEAL_PARTNER', 'dealbreakers', 'Not looking for something casual', 'hard_requirement', null],
-  ['ME', 'personality', 'Thoughtful, slow to open up', 'preference', 'I take a while'],
-  ['ME', 'lifestyle', 'Quiet evenings, long weekends outside', 'preference', null],
-  ['ME', 'relationship_style', 'Needs depth early on', 'strong_preference', null],
-  ['ME', 'values', 'Personal growth', 'preference', null],
-];
-
-export const FALLBACK_QUESTIONS = [
-  {
-    id: 'saturday_2032', prompt: "It's 2032. Which Saturday sounds better?", options: [
-      { id: 'a', label: 'Breakfast at home, kids running around, friends over later' },
-      { id: 'b', label: 'Deciding spontaneously whether to take the train to Copenhagen' },
-      { id: 'c', label: 'Slow morning, creative project, dinner with a few close friends' },
-      { id: 'd', label: 'Hosting 20 people tonight' },
-    ],
-  },
-  { id: 'roots_freedom', prompt: 'Which matters more to you?', spectrum: ['Roots', 'Freedom'] },
-  { id: 'comfort_adventure', prompt: 'Which matters more to you?', spectrum: ['Comfort', 'Adventure'] },
-  { id: 'togetherness_independence', prompt: 'Which matters more to you?', spectrum: ['Togetherness', 'Independence'] },
-];
+// Fixed lookup tables the UI renders from, plus the static (non-fake, no
+// backend needed) Matches/Friends content — see STATIC_MATCHES/STATIC_FRIENDS
+// below. There is deliberately no mock/demo fallback content here: if the
+// backend or an LLM call is unreachable, the app surfaces a real error
+// instead of substituting fabricated conversation, signals, or insights.
 
 // key -> [weight, label] — mirrors backend CATEGORY_WEIGHTS (readiness.py)
 export const WEIGHTS = {

@@ -6,6 +6,17 @@
 
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
+// Different endpoints need very different timeouts. A plain CRUD call
+// (start a conversation, patch a signal, fetch the discovery structure) is
+// fast. A conversational turn is one LLM completion. Extraction
+// (/conversation/complete) asks the LLM for STRUCTURED output across 10
+// categories at once — noticeably slower than a normal chat reply — and
+// needs the most headroom.
+export const TIMEOUT_QUICK = 8000;
+export const TIMEOUT_CHAT_REPLY = 20000;
+export const TIMEOUT_INSIGHT = 20000;
+export const TIMEOUT_EXTRACTION = 45000;
+
 const UID_KEY = 'anaphora_uid';
 
 export function getOrCreateUserId() {
@@ -22,9 +33,9 @@ export function getOrCreateUserId() {
  * Returns the parsed JSON body on success, or null on any failure (network
  * error, timeout, non-2xx) so callers can fall back to demo data.
  */
-export async function apiCall(userId, method, path, body) {
+export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QUICK) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 6000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(API_BASE + path, {
       method,

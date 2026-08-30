@@ -1,8 +1,24 @@
+import ErrorBanner from '../components/ErrorBanner';
+
 export default function Discovery({
-  discoveryBack, discoveryProgress, discoveryCounter,
+  discoveryUnavailable, discoveryBack, discoveryProgress, discoveryCounter,
   dqPrompt, dqIsChoice, dqOptions, dqIsSpectrum, dqLeft, dqRight, dqValue, onSpectrum, dqReading,
-  dqNextLabel, dqNextBg, discoveryNext,
+  dqNextLabel, dqNextBg, discoveryNext, error,
 }) {
+  if (discoveryUnavailable) {
+    return (
+      <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FBF9F6, #F2EDE6)' }}>
+        <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 34px', textAlign: 'center' }}>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#2F4A3F' }}>Discovery isn't available</div>
+          <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>We couldn't load the questions from the backend. Check it's running, then come back to this screen.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FBF9F6, #F2EDE6)' }}>
       <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -42,6 +58,8 @@ export default function Discovery({
           </div>
         )}
       </div>
+
+      <ErrorBanner message={error} />
 
       <div style={{ padding: '12px 26px 26px' }}>
         <button onClick={discoveryNext} style={{ width: '100%', padding: 17, border: 'none', borderRadius: 999, background: dqNextBg, color: '#F6F2EC', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>{dqNextLabel}</button>
