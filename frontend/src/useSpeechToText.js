@@ -9,41 +9,64 @@ import { useEffect, useRef, useState } from 'react';
  */
 export function useSpeechToText({ onTranscript, lang = 'en-US' } = {}) {
   const [listening, setListening] = useState(false);
-  const [supported, setSupported] = useState(true);
+  const [supported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition));
   const recognitionRef = useRef(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
 
-  useEffect(() => {
+  // Finalized text accumulates here, one result index at a time, and is
+  // never rebuilt from event.results[0..] on every event — some
+  // Chrome/Android builds are known to re-fire onresult with resultIndex
+  // pointing back at an already-finalized segment, and looping over the
+  // full results list from scratch each time turns that browser quirk into
+  // ever-growing, visibly repeated text. Tracking the highest result index
+  // already committed makes a repeat firing a no-op instead.
+  const finalTranscriptRef = useRef('');
+  const lastFinalIndexRef = useRef(-1);
+
+  // A fresh SpeechRecognition instance per listening session, created only
+  // in start() rather than once and reused — some browsers don't reliably
+  // reset their internal results list across stop()/start() on the SAME
+  // instance, which would replay an earlier session's words at the start
+  // of the next one no matter how the local accumulator above is reset.
+  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  const start = () => {
+    if (!supported || listening) return;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSupported(false);
-      return;
-    }
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = lang;
+    finalTranscriptRef.current = '';
+    lastFinalIndexRef.current = -1;
     recognition.onresult = (e) => {
-      let transcript = '';
-      for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
-      onTranscriptRef.current?.(transcript);
+      let interim = '';
+      // Only walk the results the browser flagged as new/changed since the
+      // last event (resultIndex) — not the whole list from 0 every time.
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (result.isFinal) {
+          if (i > lastFinalIndexRef.current) {
+            finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + result[0].transcript;
+            lastFinalIndexRef.current = i;
+          }
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      const combined = interim ? `${finalTranscriptRef.current} ${interim}` : finalTranscriptRef.current;
+      onTranscriptRef.current?.(combined.trim());
     };
     recognition.onend = () => setListening(false);
     recognition.onerror = () => setListening(false);
     recognitionRef.current = recognition;
-    return () => recognition.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
-
-  const start = () => {
-    if (!recognitionRef.current || listening) return;
     setListening(true);
-    recognitionRef.current.start();
+    recognition.start();
   };
   const stop = () => {
-    if (!recognitionRef.current || !listening) return;
-    recognitionRef.current.stop();
+    if (!listening) return;
+    recognitionRef.current?.stop();
     setListening(false);
   };
   const toggle = () => (listening ? stop() : start());
