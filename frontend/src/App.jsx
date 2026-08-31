@@ -177,8 +177,11 @@ export default function App() {
   const br = mockReadiness(s.signals, s.discoveryDone, s.preferencesSaved ? s.gender : null);
   const readiness = s.mode === 'live' ? s.readiness : br.total;
   const postMatchMode = readiness === 100 && s.hasVisitedReadyMatches;
+  const idealPartnerReady = !!br.met.ideal_partner_profile;
+  const aboutMeReady = !!br.met.me_profile;
   const steps = [
-    { key: 'convo', title: "Tell me who you're looking for", note: s.convoCompleted ? 'Blueprint created' : 'One conversation, about 3 minutes', done: s.convoCompleted, cta: s.convoCompleted ? 'Add more' : 'Start', onGo: s.convoCompleted ? go('convos') : beginConversation },
+    { key: 'ideal', title: "Tell me who you're looking for", note: idealPartnerReady ? 'Enough detail captured' : 'One conversation, about 3 minutes', done: idealPartnerReady, cta: idealPartnerReady ? 'Add more' : (s.messages.length ? 'Continue' : 'Start'), onGo: resumeConversation },
+    { key: 'me', title: 'Tell me who you are', note: aboutMeReady ? 'Enough about you' : 'Help Anaphora understand you too', done: aboutMeReady, cta: aboutMeReady ? 'Add more' : (s.messages.length ? 'Continue' : 'Start'), onGo: resumeConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving ? 'Adding insight to your Blueprint…' : (s.discoveryDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: s.discoveryDone, cta: s.discoverySaving ? 'Adding…' : (s.discoveryDone ? 'Done' : '2 min'), onGo: s.discoveryDone ? go('insight') : (s.discoverySaving ? () => {} : startDiscovery) },
     { key: 'prefs', title: 'Basic matching preferences', note: s.preferencesSaved ? s.gender + ' · ' + s.ageMin + '–' + s.ageMax : 'Who and what age range', done: s.preferencesSaved, cta: s.preferencesSaved ? 'Edit' : 'Set', onGo: go('profile') },
   ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
