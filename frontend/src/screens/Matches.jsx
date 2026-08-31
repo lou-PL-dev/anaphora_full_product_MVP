@@ -65,13 +65,15 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
   const notReady = ready === false;
 
   return (
-    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
+    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: notReady ? '#F2EDE6' : '#FBF9F6' }}>
       <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Matches</div>
-          <div style={{ marginTop: 6, fontSize: 12.5, color: '#94A09A' }}>
-            {matches.length ? "We don't believe in perfect matches. We believe in meaningful fit." : 'Quality over volume.'}
-          </div>
+          {!notReady && (
+            <div style={{ marginTop: 6, fontSize: 12.5, color: '#94A09A' }}>
+              {matches.length ? "We don't believe in perfect matches. We believe in meaningful fit." : 'Quality over volume.'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -83,10 +85,24 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
         )}
 
         {!loading && notReady && !error && (
-          <div style={{ padding: 24, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>A good introduction starts with understanding.</div>
-            <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>Before Anaphora can start looking for your matches, there are a few things we still need to understand about you, who you're looking for, and the kind of relationship you want to build.</div>
-            <button onClick={goHome} style={{ marginTop: 16, padding: '11px 20px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 13, cursor: 'pointer' }}>See what Anaphora still needs</button>
+          <div style={{ minHeight: '58vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 10px 48px' }}>
+            <div aria-hidden="true" style={{ position: 'relative', width: 150, height: 98, marginBottom: 32 }}>
+              <div style={{ position: 'absolute', width: 94, height: 76, left: 4, top: 7, borderRadius: '54% 46% 58% 42% / 48% 58% 42% 52%', background: 'rgba(221,234,230,.92)', filter: 'blur(1px)', transform: 'rotate(-8deg)' }} />
+              <div style={{ position: 'absolute', width: 90, height: 72, right: 3, bottom: 3, borderRadius: '45% 55% 42% 58% / 55% 43% 57% 45%', background: 'rgba(166,154,205,.34)', filter: 'blur(1px)', transform: 'rotate(9deg)' }} />
+            </div>
+
+            <div style={{ maxWidth: 330, fontFamily: "'Playfair Display', serif", fontSize: 31, lineHeight: 1.12, letterSpacing: '-.02em', color: '#2F4A3F' }}>
+              A good introduction<br />starts with understanding.
+            </div>
+            <div style={{ maxWidth: 330, marginTop: 18, fontFamily: "'Inter', sans-serif", fontSize: 14.5, lineHeight: 1.7, color: '#5C6B62' }}>
+              Anaphora is still getting to know you — and the person who might feel right for you. Tell us a little more and complete your first Discovery before we start making introductions.
+            </div>
+            <button
+              onClick={goHome}
+              style={{ marginTop: 24, padding: '8px 4px', border: 'none', background: 'transparent', color: '#8C7FBE', fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+            >
+              See what Anaphora still needs →
+            </button>
           </div>
         )}
 
