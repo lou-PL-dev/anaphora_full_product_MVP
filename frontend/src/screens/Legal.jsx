@@ -25,7 +25,7 @@ export default function Legal({ goBack, section }) {
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
       <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={goBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', fontSize: 15, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>←</button>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#2F4A3F' }}>The fine print</div>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#2F4A3F' }}>Important Legalities</div>
       </div>
 
       <div style={{ padding: '18px 22px 60px', maxWidth: 520 }}>
