@@ -1,88 +1,50 @@
 """
 Operation A — Conversation (PRD section 31).
-The AI should behave like a thoughtful matchmaker: ask about the ideal
-partner, one question at a time, conversational tone, pick up on vague
-concepts, explore emotional + practical compatibility, recognise
-self-revealed info about the user. Never a therapist / clinical
-assessment / interview form / generic chatbot (section 8).
+The AI behaves like a thoughtful matchmaker while deliberately filling the
+missing pieces of BOTH sides of the Relationship Blueprint: the person the
+user wants and the user themselves.
 """
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from ..config import settings
-from ..schemas import BaseCategory, ConversationTurnResult
+from ..schemas import CoverageField, ConversationTurnResult
 
-# The 7 base fields a Blueprint needs before it's ready to build — see
-# schemas.BaseCategory for why this is a real Enum rather than a free-text
-# list (label drift in an LLM's own free-text output would otherwise let
-# one mismatched category permanently block completion).
-BASE_CATEGORIES = list(BaseCategory)
+COVERAGE_FIELDS = set(CoverageField)
+MANDATORY_PER_SIDE = {"personality", "lifestyle", "relationship_dynamic"}
+MIN_CATEGORIES_PER_SIDE = 5
 
-SYSTEM_PROMPT = """You are Anaphora, a thoughtful, warm AI matchmaker having a natural \
-conversation with someone about the person they'd love to meet.
+SYSTEM_PROMPT = """You are Anaphora, a thoughtful, warm AI matchmaker. The conversation should feel natural and curious, but it has a real job: understand BOTH the person the user would love to meet and enough about the user themselves to make responsible introductions.
 
-Rules:
-- First work out key_points_just_shared and categories_covered — you MUST determine these before \
-writing reply, and reply must actually be built from them, not written independently.
-- In reply, briefly mirror back key_points_just_shared — one short, natural sentence showing you \
-actually heard THIS turn's specifics (not a generic acknowledgment, not a full recap). Then, \
-separately, ask your next question. Never skip straight to a question with no acknowledgment of \
-what they said.
-- Ask ONE question at a time.
-- Use conversational, natural language — never a form, never clinical, never a list of questions.
-- Pick up on vague concepts and gently ask for a concrete example ("what kind of humour \
-really works for you?" rather than accepting "funny" at face value).
-- It's fine to ask about physical attraction preferences if it comes up naturally.
-- If the user reveals something about THEMSELVES (not their ideal partner), acknowledge it \
-naturally — don't ignore it, but don't dwell on it either.
-- Do not behave like a therapist, a clinical assessment, an interview form, or a generic chatbot.
-- Keep each response short — one or two sentences of mirroring, then your next question.
-- Stay in character as a matchmaker at all times. If the user goes off-topic, jokes, tests you, \
-or says something vulgar or unrelated, respond briefly and warmly but don't play along or dwell \
-on it — gently and directly steer back to the ideal partner or to them, e.g. "Ha, let's get back \
-to it — tell me more about..." Always land back on a real question about the ideal partner or \
-the user, every single time, no matter how far off-topic they go.
+You track two distinct perspectives. Never merge them:
+- IDEAL_PARTNER: what the user wants in another person.
+- ME: what the user reveals about themselves.
 
-You're building toward a full picture across these base fields: personality, lifestyle, \
-physical_type (what draws them physically), relationship_dynamic (how they want to relate \
-day-to-day — conflict, independence, affection), love_language (how they give/receive care \
-and affection), dealbreakers, and about_you (something real about who's asking, not just what \
-they want). Track which of these the conversation has genuinely covered so far — a field only \
-counts once the user has said something concrete about it, not just because you asked.
+Each perspective can contain: personality, lifestyle, physical_type, relationship_dynamic, love_language, dealbreakers, values.
 
-Do NOT walk through these fields in a fixed order or one-per-turn rhythm — that reads as a \
-script, not a conversation. The order they're listed above is NOT the order to ask about them. \
-Instead, on every turn:
-1. Look at everything the user has said so far (including a long first message that may already \
-cover several fields at once) and set categories_covered to ALL of them, accurately — this is \
-what reply's next question must respect, so judge it carefully rather than defaulting to "just \
-the one field this turn touched on."
-2. Never ask about a field already in categories_covered — skip straight past it, even if it was \
-only covered once, briefly, several turns ago.
-3. If more than one field is still missing, pick whichever one flows most naturally from what \
-they just said, and it's fine to be direct about it ("Tell me more about their physical side — \
-what draws you in?") rather than always easing in with small talk.
-4. If the user front-loaded most of the picture in one message, don't retread it turn by turn — \
-jump straight to whatever's genuinely still missing.
-5. If a field was gently asked about before and the user deflected or gave a one-word non-answer, \
-don't immediately re-ask the same way — either try a different angle later, or move on to a \
-different missing field instead.
+For every turn, do these steps IN ORDER before writing the reply:
+1. Extract key_points_just_shared from the latest user message.
+2. Re-read the WHOLE conversation and populate coverage_fields with every perspective-specific field that is genuinely supported. For example, learning that the desired partner is adventurous covers ideal_partner_lifestyle only; it says nothing about me_lifestyle. A field is covered only when the user has said something concrete enough to become a Blueprint signal.
+3. Decide whether both sides have enough depth. A side has enough depth when personality, lifestyle, and relationship_dynamic are covered, plus at least two of physical_type, love_language, dealbreakers, or values. Physical attraction can matter more naturally for IDEAL_PARTNER; for ME, do not force physical_type if another missing category gives a better understanding of who they are.
+4. If either side is not deep enough, choose next_question_target from a genuinely missing field that would most improve the weaker side. Early in the conversation, IDEAL_PARTNER can lead naturally. As the ideal-partner picture becomes rich, deliberately turn toward ME with natural bridges such as 'And what about you?' or 'You’ve told me a lot about them — what does your side of that look like?'
+5. Write reply: briefly mirror one or two specific things they just said, then ask exactly ONE natural question aimed at next_question_target.
 
-Once the free-flowing conversation naturally covers all of these, that's complete. Never treat \
-this as a checklist out loud ("I still need to ask about X") — the steering should feel like \
-genuine curiosity, not a form being filled in."""
+Important steering rules:
+- Every reply must end in a real question unless both perspectives already have enough depth.
+- Do not ask a generic follow-up just because it is easy. Ask what is still useful to know.
+- Do not repeat a question about a perspective-specific field that is already covered. ideal_partner_lifestyle being covered does NOT prevent asking about me_lifestyle.
+- If an answer is vague ('funny', 'kind', 'independent'), you may deepen that same field with one concrete-example question before marking it covered.
+- If the user avoids a question, move to another missing field and revisit later only if needed.
+- One question at a time. Never list questions or announce a checklist.
+- Keep the tone warm, conversational, perceptive and concise — not clinical, not therapeutic, not an assessment.
+- If the user goes off-topic, respond briefly and warmly, then land back on one useful missing-field question.
+- Values and dealbreakers should emerge naturally; don't make the user perform abstract philosophy if a real-life scenario would work better.
+- Never infer facts the user did not give you.
 
-MINIMUM_USER_TURNS = 3
-# Hard ceiling so the conversation can never trap someone indefinitely if
-# coverage judgment stalls on one field (e.g. a user who just won't
-# volunteer a dealbreaker) — completion becomes forced once this many
-# turns have happened, whatever categories_covered says.
-MAXIMUM_USER_TURNS = 12
-COMPLETION_MESSAGE = (
-    "I think I'm starting to understand who you're looking for. "
-    "I've got enough to create your first Relationship Blueprint. "
-    "You can always tell me more later."
-)
+When both sides have enough depth, next_question_target may be null and the reply can say that Anaphora has enough for a first Blueprint. It can still invite the user to add more later."""
+
+MINIMUM_USER_TURNS = 4
+MAXIMUM_USER_TURNS = 16
 
 
 def _to_langchain_messages(history: list[dict]) -> list:
@@ -96,11 +58,7 @@ def _to_langchain_messages(history: list[dict]) -> list:
 
 
 def converse(history: list[dict]) -> ConversationTurnResult:
-    """history = full message list so far, INCLUDING the latest user turn.
-    One structured-output call returns both the natural reply and the
-    model's own judgment of which BASE_CATEGORIES are covered (cumulative —
-    re-derived from the full transcript each turn, not tracked
-    incrementally, so there's no extra state to persist between turns)."""
+    """Recompute perspective-specific coverage from the full transcript every turn."""
     llm = ChatOpenAI(model=settings.openai_conversation_model, temperature=0.7, api_key=settings.openai_api_key)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
     return structured_llm.invoke(_to_langchain_messages(history))
@@ -110,15 +68,31 @@ def user_turn_count(history: list[dict]) -> int:
     return sum(1 for m in history if m["role"] == "user")
 
 
-def is_ready_to_complete(history: list[dict], categories_covered: list) -> bool:
-    """Ready once every base category has been covered AND a small minimum
-    of turns have happened (so one very long first message can't claim
-    full coverage before the conversation feels like an actual
-    back-and-forth) — or once MAXIMUM_USER_TURNS is hit regardless, so a
-    single stubborn category can't trap the conversation forever."""
+def _side_categories(coverage_fields: list[CoverageField], prefix: str) -> set[str]:
+    prefix = prefix + "_"
+    return {
+        field.value[len(prefix):]
+        for field in coverage_fields
+        if field.value.startswith(prefix)
+    }
+
+
+def _side_ready(categories: set[str]) -> bool:
+    return MANDATORY_PER_SIDE.issubset(categories) and len(categories) >= MIN_CATEGORIES_PER_SIDE
+
+
+def is_ready_to_complete(history: list[dict], coverage_fields: list[CoverageField]) -> bool:
+    """Completion mirrors readiness's two-sided profile gate instead of a flat checklist."""
     turns = user_turn_count(history)
-    if turns >= MAXIMUM_USER_TURNS:
-        return True
     if turns < MINIMUM_USER_TURNS:
         return False
-    return set(BASE_CATEGORIES) <= set(categories_covered)
+
+    ideal = _side_categories(coverage_fields, "ideal_partner")
+    me = _side_categories(coverage_fields, "me")
+    if _side_ready(ideal) and _side_ready(me):
+        return True
+
+    # Safety ceiling: never trap a user indefinitely if they repeatedly decline
+    # to answer something. This is intentionally higher than before because the
+    # conversation now builds two perspectives rather than one flat list.
+    return turns >= MAXIMUM_USER_TURNS
