@@ -1,4 +1,4 @@
-export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery }) {
+export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions }) {
   const arcOffset = 427 - 427 * (readiness / 100);
 
   return (
@@ -10,22 +10,30 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
           <button onClick={openPlans} style={{ padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(166,154,205,.5)', background: 'rgba(255,255,255,.7)', color: '#8C7FBE', fontSize: 11, letterSpacing: '.04em', cursor: 'pointer' }}>Anaphora+</button>
         </div>
 
-        <div style={{ position: 'relative', marginTop: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div style={{ flex: 'none', position: 'relative', width: 152, height: 152 }}>
-            <svg viewBox="0 0 160 160" style={{ width: 152, height: 152, transform: 'rotate(-90deg)' }}>
-              <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(47,74,63,.1)" strokeWidth="9" />
-              <circle cx="80" cy="80" r="68" fill="none" stroke="#A69ACD" strokeWidth="9" strokeLinecap="round" strokeDasharray="427" strokeDashoffset={arcOffset} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)' }} />
-            </svg>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{readiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
-              <div style={{ marginTop: 4, fontSize: 9.5, letterSpacing: '.14em', color: '#94A09A' }}>READINESS</div>
+        {postMatchMode ? (
+          <div style={{ position: 'relative', marginTop: 30, maxWidth: 320 }}>
+            <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#8C7FBE' }}>YOUR BLUEPRINT IS READY</div>
+            <div style={{ marginTop: 9, fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.15, color: '#2F4A3F' }}>Keep teaching Anaphora what feels right.</div>
+            <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>You’re ready for introductions. Anything you add from here simply helps make future matches more nuanced and more personal.</div>
+          </div>
+        ) : (
+          <div style={{ position: 'relative', marginTop: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ flex: 'none', position: 'relative', width: 152, height: 152 }}>
+              <svg viewBox="0 0 160 160" style={{ width: 152, height: 152, transform: 'rotate(-90deg)' }}>
+                <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(47,74,63,.1)" strokeWidth="9" />
+                <circle cx="80" cy="80" r="68" fill="none" stroke="#A69ACD" strokeWidth="9" strokeLinecap="round" strokeDasharray="427" strokeDashoffset={arcOffset} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)' }} />
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{readiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
+                <div style={{ marginTop: 4, fontSize: 9.5, letterSpacing: '.14em', color: '#94A09A' }}>READINESS</div>
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{readinessHeadline}</div>
+              <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#5C6B62', textWrap: 'pretty' }}>{readinessSub}</div>
             </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{readinessHeadline}</div>
-            <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#5C6B62', textWrap: 'pretty' }}>{readinessSub}</div>
-          </div>
-        </div>
+        )}
       </div>
 
       <div style={{ padding: '20px 22px 26px', display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -51,15 +59,15 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
         )}
 
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F', paddingBottom: 6 }}>WHAT WOULD HELP MOST</div>
+          <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F', paddingBottom: 6 }}>{postMatchMode ? 'REFINE YOUR BLUEPRINT' : 'WHAT WOULD HELP MOST'}</div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {steps.map((st) => (
+            {(postMatchMode ? refinementActions : steps).map((st) => (
               <button
                 key={st.key}
                 onClick={st.onGo}
                 style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 13, padding: '15px 4px', border: 'none', borderBottom: '1px solid rgba(47,74,63,.07)', background: 'transparent', cursor: 'pointer' }}
               >
-                <span style={{ flex: 'none', width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${st.ring}`, background: st.fill, display: 'grid', placeItems: 'center', color: '#FBF9F6', fontSize: 11 }}>{st.mark}</span>
+                {!postMatchMode && <span style={{ flex: 'none', width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${st.ring}`, background: st.fill, display: 'grid', placeItems: 'center', color: '#FBF9F6', fontSize: 11 }}>{st.mark}</span>}
                 <span style={{ flex: 1 }}>
                   <span style={{ display: 'block', fontSize: 14, color: '#2F4A3F' }}>{st.title}</span>
                   <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: '#94A09A' }}>{st.note}</span>
