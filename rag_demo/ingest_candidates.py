@@ -53,8 +53,8 @@ FIRST_NAMES = {
 # fall back to an initials avatar in the UI. Order matters: these are
 # assigned in generation order within each bucket.
 PHOTO_FILES = {
-    "male": ["/candidates/m1.jpg", "/candidates/m2.jpg", "/candidates/m3.jpg"],
-    "female": ["/candidates/f1.jpg", "/candidates/f2.jpg"],
+    "male": ["/candidates/m1.jpg", "/candidates/m2.jpg", "/candidates/m3.jpg", "/candidates/m4.jpg"],
+    "female": ["/candidates/f1.jpg", "/candidates/f2.jpg", "/candidates/f3.jpg", "/candidates/f4.jpg"],
     "nonbinary": ["/candidates/a1.jpg", "/candidates/a2.jpg"],
 }
 
