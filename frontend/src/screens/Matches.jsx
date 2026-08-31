@@ -3,6 +3,25 @@ import ErrorBanner from '../components/ErrorBanner';
 
 function initials(name) { return (name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 const FIT_LABEL = { strong_fit: 'Strong fit', worth_exploring: 'Worth exploring' };
+const FALLBACK_PHOTOS = {
+  male: ['/candidates/m1.jpg', '/candidates/m2.jpg', '/candidates/m3.jpg', '/candidates/m4.jpg', '/candidates/a1.jpg'],
+  female: ['/candidates/f1.jpg', '/candidates/f2.jpg', '/candidates/f3.jpg', '/candidates/f4.jpg', '/candidates/a2.jpg'],
+  nonbinary: ['/candidates/a1.jpg', '/candidates/a2.jpg'],
+};
+
+function stablePhotoIndex(value, size) {
+  let hash = 0;
+  const text = String(value || 'candidate');
+  for (let i = 0; i < text.length; i += 1) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  return Math.abs(hash) % size;
+}
+
+function candidatePhoto(candidate) {
+  if (candidate.photo_url) return candidate.photo_url;
+  const gender = String(candidate.gender || '').toLowerCase();
+  const pool = FALLBACK_PHOTOS[gender] || [...FALLBACK_PHOTOS.male, ...FALLBACK_PHOTOS.female, ...FALLBACK_PHOTOS.nonbinary];
+  return pool[stablePhotoIndex(candidate.id || candidate.name, pool.length)];
+}
 
 function MatchLoading() {
   return <div style={{ minHeight: '62vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '12px 14px 54px' }}>
@@ -14,7 +33,7 @@ function MatchLoading() {
 
 function MatchCard({ match, primary }) {
   const { candidate, fit, sections } = match; const shownSections = primary ? sections : sections.slice(0,1);
-  return <div style={{padding:primary?18:14,borderRadius:primary?24:20,background:'#FFFFFF',border:'1px solid rgba(47,74,63,.08)',boxShadow:primary?'0 8px 26px rgba(47,74,63,.06)':'none'}}><div style={{position:'relative',height:primary?300:130}}><div style={{position:'absolute',inset:0,overflow:'hidden',borderRadius:'56% 44% 48% 52% / 46% 50% 50% 54%',background:'linear-gradient(140deg, rgba(166,154,205,.35), #DDEAE6)'}}><PortraitSlot src={candidate.photo_url||undefined} label={initials(candidate.name)}/></div><div style={{position:'absolute',top:12,right:6,padding:'8px 14px',borderRadius:999,background:'#A69ACD',color:'#FFFFFF',fontSize:12,fontWeight:500,pointerEvents:'none'}}>{FIT_LABEL[fit]||FIT_LABEL.worth_exploring}</div></div><div style={{marginTop:primary?16:12,display:'flex',alignItems:'baseline',gap:8}}><div style={{fontFamily:"'Playfair Display', serif",fontSize:primary?26:17,color:'#2F4A3F'}}>{candidate.name}</div>{primary&&<div style={{fontSize:13,color:'#94A09A'}}>{candidate.age}</div>}</div>{!primary&&<div style={{marginTop:2,fontSize:11,color:'#94A09A'}}>{candidate.age}</div>}
+  return <div style={{padding:primary?18:14,borderRadius:primary?24:20,background:'#FFFFFF',border:'1px solid rgba(47,74,63,.08)',boxShadow:primary?'0 8px 26px rgba(47,74,63,.06)':'none'}}><div style={{position:'relative',height:primary?300:130}}><div style={{position:'absolute',inset:0,overflow:'hidden',borderRadius:'56% 44% 48% 52% / 46% 50% 50% 54%',background:'linear-gradient(140deg, rgba(166,154,205,.35), #DDEAE6)'}}><PortraitSlot src={candidatePhoto(candidate)} label={initials(candidate.name)}/></div><div style={{position:'absolute',top:12,right:6,padding:'8px 14px',borderRadius:999,background:'#A69ACD',color:'#FFFFFF',fontSize:12,fontWeight:500,pointerEvents:'none'}}>{FIT_LABEL[fit]||FIT_LABEL.worth_exploring}</div></div><div style={{marginTop:primary?16:12,display:'flex',alignItems:'baseline',gap:8}}><div style={{fontFamily:"'Playfair Display', serif",fontSize:primary?26:17,color:'#2F4A3F'}}>{candidate.name}</div>{primary&&<div style={{fontSize:13,color:'#94A09A'}}>{candidate.age}</div>}</div>{!primary&&<div style={{marginTop:2,fontSize:11,color:'#94A09A'}}>{candidate.age}</div>}
   {primary&&<div style={{marginTop:16,padding:18,borderRadius:18,background:'#DDEAE6'}}><div style={{fontSize:10,letterSpacing:'.14em',color:'#A69ACD'}}>WHY ANAPHORA THINKS YOU SHOULD MEET</div><div style={{marginTop:14,display:'flex',flexDirection:'column',gap:14}}>{shownSections.map(sec=><div key={sec.heading}><div style={{fontSize:13,fontWeight:600,color:'#2F4A3F'}}>{sec.heading}</div><div style={{marginTop:4,fontSize:13,lineHeight:1.6,color:'#4A5C53'}}>{sec.body}</div></div>)}</div><div style={{marginTop:16,paddingTop:14,borderTop:'1px solid rgba(47,74,63,.08)',fontSize:11.5,color:'#94A09A'}}>Explainable AI — we show you why, not just who.</div></div>}{!primary&&shownSections.map(sec=><div key={sec.heading} style={{marginTop:10,fontSize:12,lineHeight:1.5,color:'#5C6B62'}}>{sec.body}</div>)}{primary&&<div style={{marginTop:14,display:'flex',gap:10}}><button style={{flex:1,padding:15,borderRadius:999,border:'1px solid rgba(47,74,63,.14)',background:'transparent',color:'#5C6B62',fontSize:13.5,cursor:'pointer'}}>Not now</button><button style={{flex:2,padding:15,border:'none',borderRadius:999,background:'#2F4A3F',color:'#F2EDE6',fontSize:13.5,fontWeight:500,cursor:'pointer'}}>Say hello</button></div>}</div>;
 }
 
