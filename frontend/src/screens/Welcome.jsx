@@ -10,7 +10,7 @@ export default function Welcome({ onBegin, goPrivacy, goTerms }) {
           AI that listens.<br />Friends who know you.<br />Matches that <span style={{ fontStyle: 'italic', color: '#8C7FBE' }}>make sense.</span>
         </div>
         <div style={{ marginTop: 18, fontSize: 14, lineHeight: 1.6, color: '#5C6B62', maxWidth: 280, textWrap: 'pretty' }}>
-          No swiping. We start with one conversation about who you'd love to meet.
+          No swiping. We start with one conversation about you and who you'd love to meet.
         </div>
         <button
           onClick={onBegin}
@@ -18,8 +18,9 @@ export default function Welcome({ onBegin, goPrivacy, goTerms }) {
         >
           Begin
         </button>
-        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#94A09A', letterSpacing: '.02em', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#94A09A', letterSpacing: '.02em' }}>
           <button onClick={goPrivacy} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', letterSpacing: 'inherit', color: '#8C7FBE', textDecoration: 'underline', cursor: 'pointer' }}>Privacy by design</button>
+          {' · '}
           <button onClick={goTerms} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', letterSpacing: 'inherit', color: '#8C7FBE', textDecoration: 'underline', cursor: 'pointer' }}>The fine print</button>
         </div>
       </div>
