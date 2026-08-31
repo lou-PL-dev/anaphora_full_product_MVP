@@ -60,8 +60,9 @@ function MatchCard({ match, primary }) {
   );
 }
 
-export default function Matches({ matches, loading, error, onRetry }) {
+export default function Matches({ matches, loading, ready, error, onRetry, goHome }) {
   const [primaryMatch, ...secondaryMatches] = matches;
+  const notReady = ready === false;
 
   return (
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
@@ -81,7 +82,15 @@ export default function Matches({ matches, loading, error, onRetry }) {
           <div style={{ padding: 30, textAlign: 'center', fontSize: 13, color: '#94A09A' }}>Finding your matches…</div>
         )}
 
-        {!loading && matches.length === 0 && !error && (
+        {!loading && notReady && !error && (
+          <div style={{ padding: 24, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>A good introduction starts with understanding.</div>
+            <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>Before Anaphora can start looking for your matches, there are a few things we still need to understand about you, who you're looking for, and the kind of relationship you want to build.</div>
+            <button onClick={goHome} style={{ marginTop: 16, padding: '11px 20px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 13, cursor: 'pointer' }}>See what Anaphora still needs</button>
+          </div>
+        )}
+
+        {!loading && ready === true && matches.length === 0 && !error && (
           <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>We're still curating profiles for you</div>
             <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>Good matches take a little patience — we'd rather wait for someone worth meeting than show you someone who isn't. Check back soon.</div>

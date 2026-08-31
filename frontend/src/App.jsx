@@ -32,7 +32,7 @@ const initialState = {
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false,
   gender: null, ageMax: 36,
-  matches: [], matchesLoading: false, matchesLoaded: false,
+  matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null,
   legalSection: 'privacy',
   // { screen: 'chat' | 'discovery', message: string } | null — a real
   // backend/LLM failure, surfaced in place rather than masked with
@@ -131,16 +131,12 @@ export default function App() {
     patch({ matchesLoading: true, error: null });
     const r = await api('GET', '/matches', undefined, TIMEOUT_MATCHES);
     if (r) {
-      if (!r.ready) {
-        // Backend is the single source of truth on readiness (real 100%
-        // category coverage, not the frontend's own convoCompleted flag —
-        // see matching_router.get_matches) — not ready means go finish the
-        // conversation, not show an empty or broken Matches screen.
-        patch({ matchesLoading: false });
-        resumeConversation();
-        return;
-      }
-      patch({ matches: r.matches, matchesLoading: false, matchesLoaded: true });
+      // Backend is the single source of truth on readiness (real 100%
+      // category coverage, not the frontend's own convoCompleted flag —
+      // see matching_router.get_matches). Not ready stays ON the Matches
+      // screen with its own explanation + a CTA to Home, rather than
+      // auto-redirecting into the conversation.
+      patch({ matches: r.matches, matchesReady: r.ready, matchesLoading: false, matchesLoaded: r.ready });
     } else {
       patch({ matchesLoading: false, error: { screen: 'matches', message: "Couldn't load your matches — check the backend is running, then try again." } });
     }
@@ -216,7 +212,7 @@ export default function App() {
     screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
     answers: {}, dqIdx: 0, discoveryDone: false, convoCompleted: false, turnCount: 0,
     readyToComplete: false, categoriesCovered: [], gender: null,
-    matches: [], matchesLoading: false, matchesLoaded: false,
+    matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null,
   });
 
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
@@ -358,9 +354,9 @@ export default function App() {
     case 'matches':
       screenEl = (
         <Matches
-          matches={s.matches} loading={s.matchesLoading}
+          matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady}
           error={s.error && s.error.screen === 'matches' ? s.error.message : null}
-          onRetry={fetchMatches}
+          onRetry={fetchMatches} goHome={go('home')}
         />
       );
       break;
