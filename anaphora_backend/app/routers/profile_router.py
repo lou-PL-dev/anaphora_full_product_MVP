@@ -15,6 +15,18 @@ class MatchingPreferencesIn(BaseModel):
     preferred_age_range: str
 
 
+@router.get("")
+def get_profile(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Small MVP profile surface used to restore eligibility preferences."""
+    readiness_pct, breakdown = compute_readiness(db, user.id)
+    return {
+        "gender_preference": user.gender_preference,
+        "preferred_age_range": user.preferred_age_range,
+        "readiness_pct": readiness_pct,
+        "breakdown": breakdown,
+    }
+
+
 @router.patch("/matching-preferences")
 def update_matching_preferences(
     body: MatchingPreferencesIn,
@@ -23,9 +35,8 @@ def update_matching_preferences(
 ):
     """Persist the minimum eligibility preferences used by readiness.
 
-    This intentionally stays separate from the Relationship Blueprint:
-    eligibility (who/age) is a hard matching filter, while Blueprint signals
-    describe reciprocal fit.
+    Eligibility (who/age) stays separate from Blueprint signals, which model
+    reciprocal fit rather than hard matching filters.
     """
     user.gender_preference = body.gender_preference
     user.preferred_age_range = body.preferred_age_range
