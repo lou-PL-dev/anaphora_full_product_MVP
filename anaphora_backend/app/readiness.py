@@ -1,58 +1,111 @@
-"""
-Readiness (PRD section 17) — deterministic information-coverage %, not a
-match-quality score. Each category is worth its weight in full once at
-least one qualifying signal/response exists for it.
+"""Deterministic matching readiness.
 
-The 7 conversation-based checks below mirror BASE_CATEGORIES in
-chains/conversation_chain.py — the same fields the conversation itself is
-built to steer toward until they're covered.
+Readiness answers one narrow question: do we know enough to start making
+responsible introductions? It is not a measure of how rich or complete the
+Relationship Blueprint is. Once readiness reaches 100%, later conversations,
+Discoveries and friend input can keep deepening the Blueprint without changing
+this score.
+
+Four independent gates:
+- 20% basic matching preferences
+- 20% at least one completed Discovery
+- 30% sufficient ME coverage
+- 30% sufficient IDEAL_PARTNER coverage
+
+ME and IDEAL_PARTNER use the same core dimensions. A side is sufficiently
+covered when personality, lifestyle and relationship_dynamic are present, plus
+at least two additional core dimensions. This avoids turning onboarding into a
+rigid 7/7 questionnaire while still requiring a meaningful profile.
 """
 from sqlalchemy.orm import Session
 
 from .models import BlueprintSignal, DiscoveryResponse, User
 
-CATEGORY_WEIGHTS = {
-    "ideal_partner_personality": 10,
-    "ideal_partner_lifestyle": 10,
-    "ideal_partner_physical_type": 10,
-    "ideal_partner_relationship_dynamic": 10,
-    "ideal_partner_love_language": 10,
-    "ideal_partner_dealbreakers": 10,
-    "about_you": 10,                   # any ME-perspective signal, any category
-    "discovery_completed": 15,         # any discovery_responses row
-    "basic_matching_preferences": 15,  # user.gender_preference + preferred_age_range set
+CORE_CATEGORIES = {
+    "personality",
+    "lifestyle",
+    "physical_type",
+    "relationship_dynamic",
+    "love_language",
+    "dealbreakers",
+    "values",
 }
+MANDATORY_CATEGORIES = {
+    "personality",
+    "lifestyle",
+    "relationship_dynamic",
+}
+MIN_CATEGORIES_PER_SIDE = 5
+
+CATEGORY_WEIGHTS = {
+    "basic_matching_preferences": 20,
+    "discovery_completed": 20,
+    "me_profile": 30,
+    "ideal_partner_profile": 30,
+}
+
+
+def _coverage(signals: list[BlueprintSignal], perspective: str) -> set[str]:
+    return {
+        signal.category
+        for signal in signals
+        if signal.perspective == perspective and signal.category in CORE_CATEGORIES
+    }
+
+
+def _profile_ready(covered: set[str]) -> bool:
+    return (
+        MANDATORY_CATEGORIES.issubset(covered)
+        and len(covered) >= MIN_CATEGORIES_PER_SIDE
+    )
 
 
 def compute_readiness(db: Session, user_id: str) -> tuple[int, dict]:
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user_id).all()
     user = db.get(User, user_id)
-    has_discovery = db.query(DiscoveryResponse).filter(DiscoveryResponse.user_id == user_id).first() is not None
+    has_discovery = (
+        db.query(DiscoveryResponse)
+        .filter(DiscoveryResponse.user_id == user_id)
+        .first()
+        is not None
+    )
 
-    def has_signal(perspective: str | None, category: str | None = None) -> bool:
-        for s in signals:
-            if perspective and s.perspective != perspective:
-                continue
-            if category and s.category != category:
-                continue
-            return True
-        return False
+    me_covered = _coverage(signals, "ME")
+    ideal_partner_covered = _coverage(signals, "IDEAL_PARTNER")
 
     checks = {
-        "ideal_partner_personality": has_signal("IDEAL_PARTNER", "personality"),
-        "ideal_partner_lifestyle": has_signal("IDEAL_PARTNER", "lifestyle"),
-        "ideal_partner_physical_type": has_signal("IDEAL_PARTNER", "physical_type"),
-        "ideal_partner_relationship_dynamic": has_signal("IDEAL_PARTNER", "relationship_dynamic"),
-        "ideal_partner_love_language": has_signal("IDEAL_PARTNER", "love_language"),
-        "ideal_partner_dealbreakers": has_signal("IDEAL_PARTNER", "dealbreakers"),
-        "about_you": has_signal("ME"),
+        "basic_matching_preferences": bool(
+            user and user.gender_preference and user.preferred_age_range
+        ),
         "discovery_completed": has_discovery,
-        "basic_matching_preferences": bool(user and user.gender_preference and user.preferred_age_range),
+        "me_profile": _profile_ready(me_covered),
+        "ideal_partner_profile": _profile_ready(ideal_partner_covered),
     }
 
     breakdown = {
-        key: {"weight": CATEGORY_WEIGHTS[key], "met": met}
-        for key, met in checks.items()
+        "basic_matching_preferences": {
+            "weight": CATEGORY_WEIGHTS["basic_matching_preferences"],
+            "met": checks["basic_matching_preferences"],
+        },
+        "discovery_completed": {
+            "weight": CATEGORY_WEIGHTS["discovery_completed"],
+            "met": checks["discovery_completed"],
+        },
+        "me_profile": {
+            "weight": CATEGORY_WEIGHTS["me_profile"],
+            "met": checks["me_profile"],
+            "covered_categories": sorted(me_covered),
+        },
+        "ideal_partner_profile": {
+            "weight": CATEGORY_WEIGHTS["ideal_partner_profile"],
+            "met": checks["ideal_partner_profile"],
+            "covered_categories": sorted(ideal_partner_covered),
+        },
     }
-    total = sum(CATEGORY_WEIGHTS[key] for key, met in checks.items() if met)
+
+    total = sum(
+        CATEGORY_WEIGHTS[key]
+        for key, met in checks.items()
+        if met
+    )
     return total, breakdown
