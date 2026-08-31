@@ -5,7 +5,7 @@ from ..database import get_db
 from ..auth import get_current_user
 from ..models import User, DiscoveryResponse, BlueprintSignal
 from ..schemas import DiscoveryResponseIn, DiscoveryResultResponse, BlueprintSignalOut
-from ..discovery_registry import get_discovery_spec
+from ..discovery_registry import DISCOVERIES, get_discovery_spec
 from ..readiness import compute_readiness
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
@@ -16,6 +16,15 @@ def _spec_or_404(discovery_id: str):
     if spec is None or spec.status != "active":
         raise HTTPException(404, "Discovery not found")
     return spec
+
+
+@router.get("")
+def list_discoveries():
+    return [
+        {"id": spec.id, "title": spec.title, "status": spec.status, "question_count": len(spec.questions)}
+        for spec in DISCOVERIES.values()
+        if spec.status == "active"
+    ]
 
 
 @router.get("/{discovery_id}")
@@ -42,25 +51,31 @@ def respond_to_discovery(
             raise HTTPException(400, f"Unknown question for this Discovery: {item.question_id}")
         responses_map[item.question_id] = item.response
 
-    # Generate first, then persist everything together. If the LLM fails,
-    # no half-completed Discovery responses are left in the database.
     insight_text = spec.synthesize_insight(responses_map)
     new_signal_items = spec.responses_to_signals(responses_map)
+    source_key = f"discovery:{discovery_id}"
 
     created = []
     try:
-        # Retrying a completed submission replaces this Discovery's previous
-        # data instead of duplicating responses/signals. This also makes the
-        # frontend's background retry safe.
         db.query(DiscoveryResponse).filter(
             DiscoveryResponse.user_id == user.id,
             DiscoveryResponse.discovery_id == discovery_id,
         ).delete(synchronize_session=False)
+
+        # Provenance matters once multiple Discoveries can contribute to the
+        # same Blueprint category. Delete only this Discovery's old signals.
         db.query(BlueprintSignal).filter(
             BlueprintSignal.user_id == user.id,
-            BlueprintSignal.source == "discovery",
-            BlueprintSignal.category == spec.category,
+            BlueprintSignal.source == source_key,
         ).delete(synchronize_session=False)
+        # Backward-compatible cleanup for the original MVP Discovery, whose
+        # old signals used the generic source="discovery".
+        if discovery_id == "life_you_are_building":
+            db.query(BlueprintSignal).filter(
+                BlueprintSignal.user_id == user.id,
+                BlueprintSignal.source == "discovery",
+                BlueprintSignal.category == spec.category,
+            ).delete(synchronize_session=False)
 
         for item in body:
             db.add(DiscoveryResponse(
@@ -77,7 +92,7 @@ def respond_to_discovery(
                 category=spec.category,
                 label=item.label,
                 strength=item.strength.value,
-                source="discovery",
+                source=source_key,
                 evidence_text=item.evidence_text,
             )
             db.add(signal)
