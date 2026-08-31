@@ -33,6 +33,7 @@ const initialState = {
   plansOpen: false,
   gender: null, ageMax: 36,
   matches: [], matchesLoading: false, matchesLoaded: false,
+  legalSection: 'privacy',
   // { screen: 'chat' | 'discovery', message: string } | null — a real
   // backend/LLM failure, surfaced in place rather than masked with
   // fabricated content.
@@ -71,6 +72,7 @@ export default function App() {
 
   // --- navigation ---
   const go = (screen) => () => patch({ screen, error: null });
+  const goLegal = (legalSection) => () => patch({ screen: 'legal', legalSection, error: null });
 
   const beginConversation = async () => {
     patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, error: null });
@@ -289,10 +291,10 @@ export default function App() {
   let screenEl = null;
   switch (s.screen) {
     case 'welcome':
-      screenEl = <Welcome onBegin={beginConversation} goLegal={go('legal')} />;
+      screenEl = <Welcome onBegin={beginConversation} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />;
       break;
     case 'legal':
-      screenEl = <Legal goBack={go('welcome')} />;
+      screenEl = <Legal goBack={go('welcome')} section={s.legalSection} />;
       break;
     case 'chat':
       screenEl = (

@@ -3,6 +3,8 @@
 // rights actually work today) rather than generic boilerplate or promises
 // the product doesn't yet keep. Not legal advice — have this reviewed
 // before a real launch. See PLACEHOLDER_CONTACT_EMAIL below.
+import { useEffect, useRef } from 'react';
+
 const PLACEHOLDER_CONTACT_EMAIL = 'privacy@anaphora.app';
 
 const h2 = { marginTop: 28, fontFamily: "'Playfair Display', serif", fontSize: 19, color: '#2F4A3F' };
@@ -10,7 +12,15 @@ const h3 = { marginTop: 18, fontSize: 13.5, fontWeight: 600, color: '#2F4A3F' };
 const p = { marginTop: 8, fontSize: 13, lineHeight: 1.65, color: '#4A5C53' };
 const li = { marginTop: 6, fontSize: 13, lineHeight: 1.6, color: '#4A5C53' };
 
-export default function Legal({ goBack }) {
+export default function Legal({ goBack, section }) {
+  const privacyRef = useRef(null);
+  const termsRef = useRef(null);
+
+  useEffect(() => {
+    const target = section === 'terms' ? termsRef.current : privacyRef.current;
+    if (target) target.scrollIntoView({ block: 'start' });
+  }, [section]);
+
   return (
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
       <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -25,7 +35,7 @@ export default function Legal({ goBack }) {
           about our real setup, not to be exhaustive; get a lawyer's eyes on it before a real launch.
         </div>
 
-        <div style={h2}>Privacy Policy</div>
+        <div ref={privacyRef} style={h2}>Privacy Policy</div>
 
         <div style={h3}>What we collect</div>
         <div style={p}>You're identified by a random ID your device generates and stores locally — no
@@ -78,7 +88,7 @@ export default function Legal({ goBack }) {
         <div style={p}>Data is transmitted over HTTPS. As an active MVP, some hardening — like restricting
           which sites can call our API — is still on our list rather than done.</div>
 
-        <div style={h2}>Terms & Conditions</div>
+        <div ref={termsRef} style={h2}>Terms & Conditions</div>
 
         <div style={h3}>What this is</div>
         <div style={p}>Anaphora is an early-stage matchmaking product. It doesn't promise a
