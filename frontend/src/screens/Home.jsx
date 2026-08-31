@@ -1,4 +1,4 @@
-export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount }) {
+export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery }) {
   const arcOffset = 427 - 427 * (readiness / 100);
 
   return (
@@ -29,6 +29,20 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
       </div>
 
       <div style={{ padding: '20px 22px 26px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {discoverySaving && (
+          <div style={{ padding: '15px 18px', borderRadius: 18, background: '#EFECF7', display: 'flex', alignItems: 'center', gap: 12, color: '#5C6B62', fontSize: 12.5 }}>
+            <span style={{ width: 15, height: 15, flex: 'none', borderRadius: '50%', border: '2px solid rgba(140,127,190,.25)', borderTopColor: '#8C7FBE', animation: 'apSpin .8s linear infinite' }} />
+            <span><strong style={{ color: '#2F4A3F', fontWeight: 500 }}>Adding your insight…</strong><br />Your Blueprint will update in a moment.</span>
+          </div>
+        )}
+
+        {discoverySaveError && !discoverySaving && (
+          <div style={{ padding: '15px 18px', borderRadius: 18, background: '#F6F1EE', color: '#5C6B62', fontSize: 12.5, lineHeight: 1.5 }}>
+            We couldn’t add this insight yet. Your answers are still here.
+            <button onClick={retryDiscovery} style={{ marginLeft: 7, padding: 0, border: 'none', background: 'transparent', color: '#8C7FBE', font: 'inherit', fontWeight: 600, cursor: 'pointer' }}>Try again</button>
+          </div>
+        )}
+
         {insight && (
           <div style={{ padding: '20px 22px', borderRadius: 20, background: 'linear-gradient(140deg, #EFECF7, #DDEAE6)', animation: 'apRise .5s ease both' }}>
             <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#8C7FBE' }}>FROM YOUR DISCOVERY</div>
