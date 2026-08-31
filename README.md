@@ -96,7 +96,7 @@ samples from: `rag_demo/dataset_documentation.md`.
 | 3 | BI Dashboard | `dashboard/` — custom FastAPI + JS dashboard (agreed alternative to PowerBI); `dashboard/dashboard_documentation.md` + `dashboard/screenshots/` |
 | 4 | Automation POC (n8n) | Not included — confirmed optional for this project |
 | 5 | LangSmith monitoring sample | `product_document/create-blueprint_Langsmith-trace.png`; wiring/how-to in `anaphora_backend/README.md` / `.env.example` (`LANGCHAIN_TRACING_V2` etc.) |
-| 6 | Cost & timeline estimate | *In progress* |
+| 6 | Cost & timeline estimate | `product_document/cost_timeline_estimate.md` (`product_document/cost_estimate/cost_model.py` computes the numbers) |
 | 7 | Round 1 presentation + decision | `product_document/Anaphora_Pitch_Deck_v2.pdf` — decision doc pending |
 
 ## RAG matching
