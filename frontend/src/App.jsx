@@ -29,7 +29,7 @@ const initialState = {
   questions: [], dqIdx: 0, answers: {},
   discoveryDone: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
-  plansOpen: false, whyOpen: false,
+  plansOpen: false,
   gender: null, ageMax: 36,
   matches: [], matchesLoading: false, matchesLoaded: false,
   // { screen: 'chat' | 'discovery', message: string } | null — a real
@@ -69,7 +69,7 @@ export default function App() {
   }, [s.messages, s.thinking]);
 
   // --- navigation ---
-  const go = (screen) => () => patch({ screen, whyOpen: false, error: null });
+  const go = (screen) => () => patch({ screen, error: null });
 
   const beginConversation = async () => {
     patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, error: null });
@@ -128,18 +128,29 @@ export default function App() {
     patch({ matchesLoading: true, error: null });
     const r = await api('GET', '/matches', undefined, TIMEOUT_MATCHES);
     if (r) {
+      if (!r.ready) {
+        // Backend is the single source of truth on readiness (real 100%
+        // category coverage, not the frontend's own convoCompleted flag —
+        // see matching_router.get_matches) — not ready means go finish the
+        // conversation, not show an empty or broken Matches screen.
+        patch({ matchesLoading: false });
+        resumeConversation();
+        return;
+      }
       patch({ matches: r.matches, matchesLoading: false, matchesLoaded: true });
     } else {
       patch({ matchesLoading: false, error: { screen: 'matches', message: "Couldn't load your matches — check the backend is running, then try again." } });
     }
   };
   const goMatches = () => {
-    patch({ screen: 'matches', whyOpen: false, error: null });
-    // Fetch once per session, not on every tab revisit — this call costs a
-    // real embedding + LLM generation, unlike the other tabs' static
-    // content. A completed Blueprint is required server-side anyway (see
-    // matching_router.get_matches), so there's nothing to fetch before that.
-    if (s.convoCompleted && !s.matchesLoaded && !s.matchesLoading) fetchMatches();
+    patch({ screen: 'matches', error: null });
+    // Fetch once we know we're ready, not on every tab revisit — this call
+    // costs a real embedding + LLM generation. Only matchesLoaded (set once
+    // a genuinely ready response comes back) suppresses a refetch — a
+    // not-ready response never sets it, so revisiting after completing more
+    // of the Blueprint retries correctly (cheap: the backend returns before
+    // any LLM call when not ready).
+    if (!s.matchesLoaded && !s.matchesLoading) fetchMatches();
   };
 
   // --- blueprint editing ---
@@ -206,7 +217,6 @@ export default function App() {
   });
 
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
-  const toggleWhy = () => patch((prev) => ({ whyOpen: !prev.whyOpen }));
   const openPlans = () => patch({ plansOpen: true });
   const closePlans = () => patch({ plansOpen: false });
 
@@ -342,10 +352,9 @@ export default function App() {
     case 'matches':
       screenEl = (
         <Matches
-          whyOpen={s.whyOpen} toggleWhy={toggleWhy}
-          matches={s.matches} loading={s.matchesLoading} convoCompleted={s.convoCompleted}
+          matches={s.matches} loading={s.matchesLoading}
           error={s.error && s.error.screen === 'matches' ? s.error.message : null}
-          onRetry={fetchMatches} goHome={go('home')}
+          onRetry={fetchMatches}
         />
       );
       break;

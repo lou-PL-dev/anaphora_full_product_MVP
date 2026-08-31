@@ -168,37 +168,69 @@ class CandidateOut(BaseModel):
         from_attributes = True
 
 
+class FitLevel(str, Enum):
+    """PRD section 26 (Match Presentation): 'Anaphora deliberately avoids
+    presenting 92% compatible. Instead: Strong fit / Worth exploring.' No
+    numeric score is ever shown — this is the only signal of match strength
+    the frontend renders, and it's a RELATIVE ranking within a single
+    /matches response (the best candidate that passed the genuineness
+    filter), not a claim about any absolute, comparable-across-requests
+    score."""
+    strong_fit = "strong_fit"
+    worth_exploring = "worth_exploring"
+
+
+class MatchSection(BaseModel):
+    """One themed paragraph in Anaphora's 'why this match' style — PRD
+    section 26's own example headings are 'The life you're building', 'How
+    you connect', 'Something you might enjoy', and (for an honest tension)
+    'Something to explore'. The model isn't restricted to exactly those
+    strings, but should stay in that register."""
+    heading: str
+    body: str = Field(description="One or two sentences, grounded ONLY in the information given — never invented")
+
+
 class MatchOut(BaseModel):
     candidate: CandidateOut
-    match_pct: int
-    shared_signals: list[str] = Field(
-        description="Short labels both the user's ideal_partner signals and this candidate's own "
-        "signals agree on — the deterministic, non-hallucinated half of 'why this match'"
+    fit: FitLevel
+    sections: list[MatchSection] = Field(
+        description="1-4 themed paragraphs explaining the match — never empty: a candidate with "
+        "nothing genuine to say is dropped before reaching this response entirely, per PRD section 26"
     )
-    explanation: str = Field(description="A short, natural compatibility blurb grounded in shared_signals")
 
 
 class MatchListResponse(BaseModel):
-    matches: list[MatchOut]
+    ready: bool = Field(description="Whether readiness_pct has reached 100 — matching is only offered once a Blueprint is complete")
+    readiness_pct: int
+    matches: list[MatchOut] = Field(
+        description="Empty either because ready is False, or because ready is True but nothing in the "
+        "candidate pool currently clears the genuineness bar — the frontend distinguishes those two "
+        "cases via `ready`, not by matches being empty alone"
+    )
 
 
 # --- LLM structured output for the matching chain's generation step --------
 
-class MatchExplanationItem(BaseModel):
+class MatchExplanation(BaseModel):
     candidate_id: str
-    explanation: str = Field(
-        description="One or two natural sentences on why this candidate could be a good match for "
-        "the user, grounded ONLY in the shared signals given for this candidate — never invent "
-        "compatibility details not present in the provided signals"
+    has_genuine_match: bool = Field(
+        description="False if there is nothing specific and genuinely grounded to say about this "
+        "candidate — a thin or generic overlap does NOT count as genuine. When false, sections MUST "
+        "be empty; this candidate will not be shown to the user at all. It is not only acceptable but "
+        "REQUIRED to say false rather than stretch a vague signal into a confident-sounding paragraph."
+    )
+    sections: list[MatchSection] = Field(
+        default_factory=list,
+        description="1-4 sections when has_genuine_match is true; empty when it's false",
     )
 
 
 class MatchExplanationsResult(BaseModel):
     """Target schema for the matching chain's generation call — one LLM call
-    explains ALL retrieved candidates at once rather than one call per
-    candidate, same cost-conscious pattern as conversation_chain.converse()
-    returning reply + categories_covered together."""
-    explanations: list[MatchExplanationItem]
+    judges AND explains all retrieved candidates at once, same cost-conscious
+    pattern as conversation_chain.converse() returning reply +
+    categories_covered together."""
+    explanations: list[MatchExplanation]
 
 
 class DiscoveryResponseIn(BaseModel):
