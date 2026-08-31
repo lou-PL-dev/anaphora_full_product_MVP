@@ -9,7 +9,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ConversationTurnResult, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+from app.schemas import ConversationTurnResult, CoverageField, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
 
 FAKE_EXTRACTION = ExtractionResult(
     ideal_partner=PerspectiveBlueprint(
@@ -27,7 +27,7 @@ FAKE_EXTRACTION = ExtractionResult(
 
 FAKE_TURN = ConversationTurnResult(
     key_points_just_shared=["warm", "funny"],
-    categories_covered=["personality"],
+    coverage_fields=[CoverageField.ideal_partner_personality],
     reply="What kind of humour really works for you?",
 )
 
