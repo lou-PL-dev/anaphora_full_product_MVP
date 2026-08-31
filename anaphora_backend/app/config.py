@@ -27,6 +27,13 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    # The conversation chain alone gets a stronger model: it has to hold an
+    # entire transcript's category-coverage state in mind while improvising
+    # natural, non-repetitive phrasing every turn — extraction and
+    # discovery insight synthesis are simpler one-shot structured-output
+    # tasks that gpt-4o-mini handles fine, so only this one call site's
+    # cost goes up.
+    openai_conversation_model: str = "gpt-4o"
 
     class Config:
         env_file = REPO_ROOT / ".env"

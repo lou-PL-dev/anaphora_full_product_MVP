@@ -16,7 +16,9 @@ FAKE_EXTRACTION = ExtractionResult(
     narrative="Warm.",
 )
 
-FAKE_TURN = ConversationTurnResult(reply="Tell me more?", categories_covered=["personality"])
+FAKE_TURN = ConversationTurnResult(
+    key_points_just_shared=["warm"], categories_covered=["personality"], reply="Tell me more?"
+)
 
 with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
      patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION):

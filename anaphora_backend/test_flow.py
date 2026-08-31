@@ -26,8 +26,9 @@ FAKE_EXTRACTION = ExtractionResult(
 )
 
 FAKE_TURN = ConversationTurnResult(
-    reply="What kind of humour really works for you?",
+    key_points_just_shared=["warm", "funny"],
     categories_covered=["personality"],
+    reply="What kind of humour really works for you?",
 )
 
 with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \

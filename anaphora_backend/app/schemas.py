@@ -91,14 +91,30 @@ class ConversationMessageResponse(BaseModel):
 
 class ConversationTurnResult(BaseModel):
     """Target schema for the conversational LLM's structured output — one
-    call returns both its natural reply AND its own judgment of which base
-    categories are now covered by the conversation so far, so the
-    completion gate doesn't need a second LLM call to track coverage turn
-    by turn."""
-    reply: str = Field(description="The natural, conversational reply — one or two sentences, then the next question")
+    call returns its own judgment of which base categories are now covered
+    by the conversation so far AND its natural reply, so the completion
+    gate doesn't need a second LLM call to track coverage turn by turn.
+
+    Field ORDER here matters, not just presence: with_structured_output
+    generates JSON fields sequentially in declaration order, so putting
+    key_points_just_shared and categories_covered BEFORE reply forces the
+    model to explicitly work out what was just said and what's already
+    covered first — reply is then generated conditioned on that already-
+    committed judgment, instead of being improvised from scratch with no
+    coverage reasoning behind it (which produced generic non-mirroring
+    replies and re-asking about already-covered ground when reply was
+    generated first, before any coverage judgment existed to steer it)."""
+    key_points_just_shared: list[str] = Field(
+        description="Short phrases capturing what the user's LATEST message actually revealed — "
+        "used to ground a real mirror-back in the reply, not a generic acknowledgment"
+    )
     categories_covered: list[BaseCategory] = Field(
         description="Which base categories have enough information so far, judged "
         "over the WHOLE conversation, not just this turn"
+    )
+    reply: str = Field(
+        description="The natural, conversational reply — briefly mirror back key_points_just_shared, "
+        "then ask about a category NOT in categories_covered, one or two sentences total"
     )
 
 
