@@ -4,6 +4,7 @@ import TabBar from './components/TabBar';
 import SignalEditSheet from './components/SignalEditSheet';
 import PlansModal from './components/PlansModal';
 import Welcome from './screens/Welcome';
+import Legal from './screens/Legal';
 import Chat from './screens/Chat';
 import Enough from './screens/Enough';
 import Blueprint from './screens/Blueprint';
@@ -288,7 +289,10 @@ export default function App() {
   let screenEl = null;
   switch (s.screen) {
     case 'welcome':
-      screenEl = <Welcome onBegin={beginConversation} />;
+      screenEl = <Welcome onBegin={beginConversation} goLegal={go('legal')} />;
+      break;
+    case 'legal':
+      screenEl = <Legal goBack={go('welcome')} />;
       break;
     case 'chat':
       screenEl = (

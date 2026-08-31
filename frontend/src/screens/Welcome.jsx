@@ -1,4 +1,4 @@
-export default function Welcome({ onBegin }) {
+export default function Welcome({ onBegin, goLegal }) {
   return (
     <div className="ap-screen" style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '58px 32px 44px', background: 'linear-gradient(170deg, #F2EDE6 0%, #FBF9F6 48%, #DDEAE6 100%)' }}>
       <div style={{ position: 'absolute', top: -70, right: -90, width: 300, height: 280, borderRadius: '58% 42% 47% 53% / 52% 46% 54% 48%', background: 'linear-gradient(140deg, rgba(166,154,205,.5), rgba(221,234,230,.5))', filter: 'blur(2px)', animation: 'apBreathe 14s ease-in-out infinite' }} />
@@ -18,7 +18,9 @@ export default function Welcome({ onBegin }) {
         >
           Begin
         </button>
-        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#94A09A', letterSpacing: '.02em' }}>Privacy by design · EU-first · Takes about 3 minutes</div>
+        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 11, color: '#94A09A', letterSpacing: '.02em' }}>
+          Privacy by design · <button onClick={goLegal} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', letterSpacing: 'inherit', color: '#8C7FBE', textDecoration: 'underline', cursor: 'pointer' }}>The fine print</button>
+        </div>
       </div>
     </div>
   );
