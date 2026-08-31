@@ -17,19 +17,20 @@ import Friends from './screens/Friends';
 import Profile from './screens/Profile';
 import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT, TIMEOUT_MATCHES } from './api';
 import { mockReadiness } from './readiness';
-import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE, DISCOVERY_LIBRARY, DEFAULT_DISCOVERY_ID } from './data';
+import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE, DISCOVERY_LIBRARY } from './data';
 import { LAV, SAGE } from './theme';
 
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
+const DEFAULT_DISCOVERY_ID = 'life_you_are_building';
 
 const initialState = {
   screen: 'welcome', framed: false, mode: 'checking',
   convoId: null, messages: [], draft: '', thinking: false,
   turnCount: 0, readyToComplete: false, categoriesCovered: [],
   signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
-  questions: [], dqIdx: 0, answers: {},
   discoveryId: DEFAULT_DISCOVERY_ID, discoveryTitle: '', discoveryReturnScreen: 'home', discoveryLoading: false,
-  completedDiscoveries: [], discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
+  questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [],
+  discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false,
   gender: null, ageMin: 18, ageMax: 99,
@@ -51,6 +52,9 @@ export default function App() {
 
   useEffect(() => {
     uidRef.current = getOrCreateUserId();
+    api('GET', '/discovery/' + DEFAULT_DISCOVERY_ID).then((r) => {
+      if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || 'What kind of life are you building?' });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -105,17 +109,16 @@ export default function App() {
   };
 
   const startDiscovery = async (discoveryId = DEFAULT_DISCOVERY_ID, returnScreen = 'home') => {
-    const meta = DISCOVERY_LIBRARY.find((d) => d.id === discoveryId);
-    patch({ screen: 'discovery', discoveryId, discoveryTitle: meta ? meta.title : '', discoveryReturnScreen: returnScreen, discoveryLoading: true, questions: [], dqIdx: 0, answers: {}, error: null, discoverySaveError: false });
-    const r = await api('GET', `/discovery/${discoveryId}`);
-    if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || (meta ? meta.title : ''), discoveryLoading: false });
+    patch({ screen: 'discovery', discoveryId, discoveryReturnScreen: returnScreen, discoveryLoading: true, discoveryTitle: '', questions: [], dqIdx: 0, answers: {}, error: null, discoverySaveError: false });
+    const r = await api('GET', '/discovery/' + discoveryId);
+    if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || '', discoveryLoading: false });
     else patch({ discoveryLoading: false });
   };
   const discoveryBack = () => { if (s.dqIdx === 0) patch({ screen: s.discoveryReturnScreen || 'home' }); else patch((prev) => ({ dqIdx: prev.dqIdx - 1 })); };
   const pickOption = (qid, option) => () => patch((prev) => ({ answers: { ...prev.answers, [qid]: option.id === 'other' ? '__OTHER__' : option.label } }));
-  const onSpectrum = (e) => { const q = s.questions[s.dqIdx]; const v = Number(e.target.value); patch((prev) => ({ answers: { ...prev.answers, [q.id]: v } })); };
+  const onOtherAnswer = (e) => { const q = s.questions[s.dqIdx]; patch((prev) => ({ answers: { ...prev.answers, [q.id]: 'Other: ' + e.target.value } })); };
   const onTextAnswer = (e) => { const q = s.questions[s.dqIdx]; patch((prev) => ({ answers: { ...prev.answers, [q.id]: e.target.value } })); };
-  const onOtherAnswer = (e) => { const q = s.questions[s.dqIdx]; patch((prev) => ({ answers: { ...prev.answers, [q.id]: `Other: ${e.target.value}` } })); };
+  const onSpectrum = (e) => { const q = s.questions[s.dqIdx]; const v = Number(e.target.value); patch((prev) => ({ answers: { ...prev.answers, [q.id]: v } })); };
 
   const buildDiscoveryPayload = (questions, answers) => questions.map((qq) => {
     const a = answers[qq.id];
@@ -124,35 +127,39 @@ export default function App() {
       const v = Number(a);
       response = v < 45 ? qq.spectrum[0] : (v > 55 ? qq.spectrum[1] : 'Balanced between ' + qq.spectrum[0] + ' and ' + qq.spectrum[1]);
       response += ' (' + v + '/100 toward ' + qq.spectrum[1] + ')';
-    } else if (qq.options && !String(a).startsWith('Other: ')) {
-      const o = qq.options.find((x) => x.label === a);
-      response = o ? o.id : String(a);
+    } else if (qq.options) {
+      if (String(a).startsWith('Other: ')) response = String(a).slice(7).trim();
+      else {
+        const o = qq.options.find((x) => x.label === a);
+        response = o ? o.id : String(a);
+      }
     }
     return { user_id: uidRef.current, question_id: qq.id, response };
   });
 
-  const submitDiscoveryInBackground = async (discoveryId, questions, answers) => {
+  const submitDiscoveryInBackground = async (questions, answers, discoveryId) => {
     const payload = buildDiscoveryPayload(questions, answers);
     patch({ discoverySaving: true, discoverySaveError: false, error: null });
-    const r = await api('POST', `/discovery/${discoveryId}/respond`, payload, TIMEOUT_INSIGHT);
+    const r = await api('POST', '/discovery/' + discoveryId + '/respond', payload, TIMEOUT_INSIGHT);
     if (r) {
       patch((prev) => ({ insight: r.insight_text, newSignals: r.new_signals, signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct, discoveryDone: true, completedDiscoveries: prev.completedDiscoveries.includes(discoveryId) ? prev.completedDiscoveries : prev.completedDiscoveries.concat(discoveryId), discoverySaving: false, discoverySaveError: false }));
     } else patch({ discoverySaving: false, discoverySaveError: true });
   };
 
   const discoveryNext = () => {
-    const { dqIdx, questions, answers, discoveryId } = s;
+    const { dqIdx, questions, answers, discoveryId, discoveryReturnScreen } = s;
     const q = questions[dqIdx];
-    if (!q || answers[q.id] === undefined) return;
-    const raw = String(answers[q.id] ?? '');
-    if ((q.text || raw === '__OTHER__' || raw.startsWith('Other: ')) && !raw.replace(/^Other:\s*/, '').trim()) return;
+    const answer = answers[q.id];
+    const otherSelected = answer === '__OTHER__' || String(answer || '').startsWith('Other: ');
+    const answered = q.text ? !!String(answer || '').trim() : otherSelected ? String(answer || '').replace(/^Other:\s*/, '').trim().length > 0 : answer !== undefined;
+    if (!answered) return;
     if (dqIdx < questions.length - 1) { patch({ dqIdx: dqIdx + 1, error: null }); return; }
-    patch({ screen: s.discoveryReturnScreen || 'home', discoverySaving: true, discoverySaveError: false, error: null });
-    submitDiscoveryInBackground(discoveryId, questions, answers);
+    patch({ screen: discoveryReturnScreen === 'convos' ? 'convos' : 'home', discoverySaving: true, discoverySaveError: false, error: null });
+    submitDiscoveryInBackground(questions, answers, discoveryId);
   };
   const retryDiscovery = () => {
     if (s.discoverySaving || !s.questions.length || !Object.keys(s.answers).length) return;
-    submitDiscoveryInBackground(s.discoveryId, s.questions, s.answers);
+    submitDiscoveryInBackground(s.questions, s.answers, s.discoveryId);
   };
 
   const pickGender = (v) => patch({ gender: v, preferencesSaved: false, preferencesError: null });
@@ -243,7 +250,7 @@ export default function App() {
     case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />; break;
     case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} />; break;
     case 'convos': screenEl = <Convos convoStatus={s.convoCompleted ? 'Completed · ' + s.turnCount + ' turns' : (s.messages.length ? 'In progress' : 'Not started')} convoCta={s.convoCompleted ? 'Continue' : (s.messages.length ? 'Resume' : 'Start')} resumeConversation={resumeConversation} discoveries={discoveries} startDiscovery={startDiscovery} />; break;
-    case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Continue'} dqNextBg={answered ? SAGE : '#DDEAE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
+    case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Choose the most fitting'} dqNextBg={answered ? SAGE : '#F2EDE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
     case 'friends': screenEl = <Friends />; break;
