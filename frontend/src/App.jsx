@@ -31,7 +31,8 @@ const initialState = {
   discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false,
-  gender: null, ageMax: 36,
+  gender: null, ageMin: 18, ageMax: 99,
+  preferencesSaved: false, preferencesSaving: false, preferencesError: null,
   matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null,
   legalSection: 'privacy', error: null,
 };
@@ -132,9 +133,7 @@ export default function App() {
         signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct,
         discoveryDone: true, discoverySaving: false, discoverySaveError: false,
       }));
-    } else {
-      patch({ discoverySaving: false, discoverySaveError: true });
-    }
+    } else patch({ discoverySaving: false, discoverySaveError: true });
   };
 
   const discoveryNext = () => {
@@ -150,17 +149,38 @@ export default function App() {
     submitDiscoveryInBackground(s.questions, s.answers);
   };
 
-  const pickGender = (v) => patch((prev) => ({ gender: v, readiness: prev.mode === 'live' ? prev.readiness : mockReadiness(prev.signals, prev.discoveryDone, v).total }));
-  const onAge = (e) => patch({ ageMax: Number(e.target.value) });
+  const pickGender = (v) => patch({ gender: v, preferencesSaved: false, preferencesError: null });
+  const onAgeMin = (e) => {
+    const value = Number(e.target.value);
+    patch((prev) => ({ ageMin: Math.min(value, prev.ageMax), preferencesSaved: false, preferencesError: null }));
+  };
+  const onAgeMax = (e) => {
+    const value = Number(e.target.value);
+    patch((prev) => ({ ageMax: Math.max(value, prev.ageMin), preferencesSaved: false, preferencesError: null }));
+  };
+  const savePreferences = async () => {
+    if (!s.gender || s.preferencesSaving) return;
+    patch({ preferencesSaving: true, preferencesError: null });
+    const r = await api('PATCH', '/preferences', {
+      gender_preference: s.gender,
+      age_min: s.ageMin,
+      age_max: s.ageMax,
+    });
+    if (r) {
+      patch({
+        preferencesSaving: false, preferencesSaved: true,
+        readiness: r.readiness_pct, matches: [], matchesLoaded: false, matchesReady: null,
+      });
+    } else {
+      patch({ preferencesSaving: false, preferencesSaved: false, preferencesError: "We couldn't save your preferences. Please try again." });
+    }
+  };
+
   const resetAll = () => {
-    // "Start over" must also start over on the backend. The backend identifies
-    // anonymous users by this localStorage UUID, so keeping it reused old
-    // signals/preferences and made a visually fresh profile inherit stale
-    // readiness. Generate a new anonymous identity for a genuinely clean run.
     const newUid = crypto.randomUUID ? crypto.randomUUID() : 'u-' + Date.now();
     try { localStorage.setItem('anaphora_uid', newUid); } catch (e) { /* ignore */ }
     uidRef.current = newUid;
-    patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null });
+    patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, ageMin: 18, ageMax: 99, preferencesSaved: false, preferencesSaving: false, preferencesError: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null });
   };
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
   const openPlans = () => patch({ plansOpen: true });
@@ -174,12 +194,12 @@ export default function App() {
     });
     return { title, side, items };
   }).filter((g) => g.items.length);
-  const br = mockReadiness(s.signals, s.discoveryDone, s.gender);
+  const br = mockReadiness(s.signals, s.discoveryDone, s.preferencesSaved ? s.gender : null);
   const readiness = s.mode === 'live' ? s.readiness : br.total;
   const steps = [
     { key: 'convo', title: "Tell me who you're looking for", note: s.convoCompleted ? 'Blueprint created' : 'One conversation, about 3 minutes', done: s.convoCompleted, cta: s.convoCompleted ? 'Add more' : 'Start', onGo: s.convoCompleted ? go('convos') : beginConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving ? 'Adding insight to your Blueprint…' : (s.discoveryDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: s.discoveryDone, cta: s.discoverySaving ? 'Adding…' : (s.discoveryDone ? 'Done' : '2 min'), onGo: s.discoveryDone ? go('insight') : (s.discoverySaving ? () => {} : startDiscovery) },
-    { key: 'prefs', title: 'Basic matching preferences', note: s.gender ? s.gender + ' · 24–' + s.ageMax : 'Who and what age range', done: !!s.gender, cta: s.gender ? 'Edit' : 'Set', onGo: go('profile') },
+    { key: 'prefs', title: 'Basic matching preferences', note: s.preferencesSaved ? s.gender + ' · ' + s.ageMin + '–' + s.ageMax : 'Who and what age range', done: s.preferencesSaved, cta: s.preferencesSaved ? 'Edit' : 'Set', onGo: go('profile') },
     { key: 'friends', title: 'Ask a friend to describe you', note: '3 friends have already answered', done: true, cta: 'View', onGo: go('friends') },
   ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
 
@@ -217,7 +237,7 @@ export default function App() {
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
     case 'friends': screenEl = <Friends />; break;
-    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMax={s.ageMax} onAge={onAge} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
+    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
     default: screenEl = null;
   }
 
