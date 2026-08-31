@@ -21,7 +21,7 @@ export const API_BASE = import.meta.env.VITE_API_BASE || 'https://anaphora-app.o
 // needs the most headroom.
 export const TIMEOUT_QUICK = 45000;
 export const TIMEOUT_CHAT_REPLY = 20000;
-export const TIMEOUT_INSIGHT = 20000;
+export const TIMEOUT_INSIGHT = 45000;
 export const TIMEOUT_EXTRACTION = 45000;
 // /matches does one embedding call plus one structured-output LLM call
 // (see matching_chain.generate_match_explanations) across several
