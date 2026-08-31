@@ -33,7 +33,7 @@ const initialState = {
   plansOpen: false,
   gender: null, ageMin: 18, ageMax: 99,
   preferencesSaved: false, preferencesSaving: false, preferencesError: null,
-  matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null,
+  matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null, hasVisitedReadyMatches: false,
   legalSection: 'privacy', error: null,
 };
 
@@ -89,10 +89,10 @@ export default function App() {
   const fetchMatches = async () => {
     patch({ matchesLoading: true, error: null });
     const r = await api('GET', '/matches', undefined, TIMEOUT_MATCHES);
-    if (r) patch({ matches: r.matches, matchesReady: r.ready, matchesLoading: false, matchesLoaded: r.ready });
+    if (r) patch((prev) => ({ matches: r.matches, matchesReady: r.ready, matchesLoading: false, matchesLoaded: r.ready, hasVisitedReadyMatches: prev.hasVisitedReadyMatches || r.ready }));
     else patch({ matchesLoading: false, error: { screen: 'matches', message: "Couldn't load your matches — check the backend is running, then try again." } });
   };
-  const goMatches = () => { patch({ screen: 'matches', error: null }); if (!s.matchesLoaded && !s.matchesLoading) fetchMatches(); };
+  const goMatches = () => { patch({ screen: 'matches', error: null }); if (!s.matchesLoaded && !s.matchesLoading) fetchMatches(); else if (s.matchesReady) patch({ hasVisitedReadyMatches: true }); };
 
   const openEdit = (sig) => () => patch({ editing: sig, editLabel: sig.label, editStrength: sig.strength });
   const closeEdit = () => patch({ editing: null });
@@ -128,11 +128,7 @@ export default function App() {
     patch({ discoverySaving: true, discoverySaveError: false, error: null });
     const r = await api('POST', '/discovery/life_you_are_building/respond', payload, TIMEOUT_INSIGHT);
     if (r) {
-      patch((prev) => ({
-        insight: r.insight_text, newSignals: r.new_signals,
-        signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct,
-        discoveryDone: true, discoverySaving: false, discoverySaveError: false,
-      }));
+      patch((prev) => ({ insight: r.insight_text, newSignals: r.new_signals, signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct, discoveryDone: true, discoverySaving: false, discoverySaveError: false }));
     } else patch({ discoverySaving: false, discoverySaveError: true });
   };
 
@@ -150,37 +146,21 @@ export default function App() {
   };
 
   const pickGender = (v) => patch({ gender: v, preferencesSaved: false, preferencesError: null });
-  const onAgeMin = (e) => {
-    const value = Number(e.target.value);
-    patch((prev) => ({ ageMin: Math.min(value, prev.ageMax), preferencesSaved: false, preferencesError: null }));
-  };
-  const onAgeMax = (e) => {
-    const value = Number(e.target.value);
-    patch((prev) => ({ ageMax: Math.max(value, prev.ageMin), preferencesSaved: false, preferencesError: null }));
-  };
+  const onAgeMin = (e) => { const value = Number(e.target.value); patch((prev) => ({ ageMin: Math.min(value, prev.ageMax), preferencesSaved: false, preferencesError: null })); };
+  const onAgeMax = (e) => { const value = Number(e.target.value); patch((prev) => ({ ageMax: Math.max(value, prev.ageMin), preferencesSaved: false, preferencesError: null })); };
   const savePreferences = async () => {
     if (!s.gender || s.preferencesSaving) return;
     patch({ preferencesSaving: true, preferencesError: null });
-    const r = await api('PATCH', '/preferences', {
-      gender_preference: s.gender,
-      age_min: s.ageMin,
-      age_max: s.ageMax,
-    });
-    if (r) {
-      patch({
-        preferencesSaving: false, preferencesSaved: true,
-        readiness: r.readiness_pct, matches: [], matchesLoaded: false, matchesReady: null,
-      });
-    } else {
-      patch({ preferencesSaving: false, preferencesSaved: false, preferencesError: "We couldn't save your preferences. Please try again." });
-    }
+    const r = await api('PATCH', '/preferences', { gender_preference: s.gender, age_min: s.ageMin, age_max: s.ageMax });
+    if (r) patch({ preferencesSaving: false, preferencesSaved: true, readiness: r.readiness_pct, matches: [], matchesLoaded: false, matchesReady: null });
+    else patch({ preferencesSaving: false, preferencesSaved: false, preferencesError: "We couldn't save your preferences. Please try again." });
   };
 
   const resetAll = () => {
     const newUid = crypto.randomUUID ? crypto.randomUUID() : 'u-' + Date.now();
     try { localStorage.setItem('anaphora_uid', newUid); } catch (e) { /* ignore */ }
     uidRef.current = newUid;
-    patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, ageMin: 18, ageMax: 99, preferencesSaved: false, preferencesSaving: false, preferencesError: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null });
+    patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, ageMin: 18, ageMax: 99, preferencesSaved: false, preferencesSaving: false, preferencesError: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null, hasVisitedReadyMatches: false });
   };
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
   const openPlans = () => patch({ plansOpen: true });
@@ -196,12 +176,17 @@ export default function App() {
   }).filter((g) => g.items.length);
   const br = mockReadiness(s.signals, s.discoveryDone, s.preferencesSaved ? s.gender : null);
   const readiness = s.mode === 'live' ? s.readiness : br.total;
+  const postMatchMode = readiness === 100 && s.hasVisitedReadyMatches;
   const steps = [
     { key: 'convo', title: "Tell me who you're looking for", note: s.convoCompleted ? 'Blueprint created' : 'One conversation, about 3 minutes', done: s.convoCompleted, cta: s.convoCompleted ? 'Add more' : 'Start', onGo: s.convoCompleted ? go('convos') : beginConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving ? 'Adding insight to your Blueprint…' : (s.discoveryDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: s.discoveryDone, cta: s.discoverySaving ? 'Adding…' : (s.discoveryDone ? 'Done' : '2 min'), onGo: s.discoveryDone ? go('insight') : (s.discoverySaving ? () => {} : startDiscovery) },
     { key: 'prefs', title: 'Basic matching preferences', note: s.preferencesSaved ? s.gender + ' · ' + s.ageMin + '–' + s.ageMax : 'Who and what age range', done: s.preferencesSaved, cta: s.preferencesSaved ? 'Edit' : 'Set', onGo: go('profile') },
-    { key: 'friends', title: 'Ask a friend to describe you', note: '3 friends have already answered', done: true, cta: 'View', onGo: go('friends') },
   ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
+  const refinementActions = [
+    { key: 'talk', title: 'Talk to Anaphora', note: 'Add nuance about you or the person you’re looking for', cta: 'Continue', onGo: resumeConversation },
+    { key: 'discover', title: 'Explore another Discovery', note: 'Reflect on chemistry, affection, values and everyday life', cta: 'Discover', onGo: startDiscovery },
+    { key: 'friend', title: 'Ask someone who knows you well', note: 'A different perspective can reveal patterns you might not notice', cta: 'Ask a friend', onGo: go('friends') },
+  ];
 
   const q = s.questions[s.dqIdx] || { id: '_none', prompt: '', options: [] };
   const ans = s.answers[q.id];
@@ -231,7 +216,7 @@ export default function App() {
     case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} readyToComplete={s.readyToComplete} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
     case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} groups={groups} />; break;
     case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />; break;
-    case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} />; break;
+    case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} />; break;
     case 'convos': screenEl = <Convos convoStatus={s.convoCompleted ? 'Completed · ' + s.turnCount + ' turns' : (s.messages.length ? 'In progress' : 'Not started')} convoCta={s.convoCompleted ? 'Continue' : (s.messages.length ? 'Resume' : 'Start')} resumeConversation={resumeConversation} discoveryState={s.discoveryDone ? 'Completed — see your insight' : (s.discoverySaving ? 'Adding to your Blueprint…' : 'Not started yet')} startDiscovery={startDiscovery} />; break;
     case 'discovery': screenEl = <Discovery discoveryUnavailable={s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%'} discoveryCounter={(s.dqIdx + 1) + '/' + s.questions.length} dqPrompt={q.prompt} dqIsChoice={!isSpectrum} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqNextLabel={!answered ? (isSpectrum ? 'Move the slider' : 'Pick one') : (last ? 'Add to my Blueprint' : 'Next')} dqNextBg={answered ? SAGE : 'rgba(47,74,63,.28)'} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
