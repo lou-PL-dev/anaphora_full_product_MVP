@@ -6,7 +6,16 @@
 // app surfaces a real error instead of substituting fabricated
 // conversation, signals, insights, or matches.
 
-// key -> [weight, label] — mirrors backend CATEGORY_WEIGHTS (readiness.py)
+export const DISCOVERY_LIBRARY = [
+  { id: 'feel_at_home', title: 'What makes you feel at home?', note: 'Closeness, reassurance and emotional needs', questions: 4, minutes: 2 },
+  { id: 'life_you_are_building', title: 'What kind of life are you building?', note: 'Lifestyle, future, roots and freedom', questions: 4, minutes: 2 },
+  { id: 'chemistry', title: 'What creates chemistry?', note: 'Attraction, energy and what pulls you in', questions: 4, minutes: 2 },
+  { id: 'how_you_love', title: 'How do you love?', note: 'Closeness, conflict and communication', questions: 4, minutes: 2 },
+  { id: 'live_together', title: 'Could we actually live together?', note: 'Everyday compatibility, routines and money', questions: 4, minutes: 2 },
+  { id: 'non_negotiables', title: "What can't you compromise on?", note: 'Must-haves, trade-offs and boundaries', questions: 4, minutes: 3 },
+  { id: 'relationship_archaeology', title: 'Relationship Archaeology', note: 'A deeper look at patterns from past relationships', questions: 5, minutes: 6, deeper: true },
+];
+
 export const WEIGHTS = {
   ideal_partner_personality: [10, 'Who they are'],
   ideal_partner_lifestyle: [10, 'How they live'],
@@ -19,18 +28,11 @@ export const WEIGHTS = {
   basic_matching_preferences: [15, 'Basic matching preferences'],
 };
 
-// The 7 base categories the conversation steers toward — mirrors
-// BASE_CATEGORIES in anaphora_backend/app/chains/conversation_chain.py.
-// Used to turn `categories_covered` from /conversation/message into a
-// real progress readout instead of a raw turn count.
 export const BASE_CATEGORIES = [
   'personality', 'lifestyle', 'physical_type',
   'relationship_dynamic', 'love_language', 'dealbreakers', 'about_you',
 ];
 
-// [perspective, category|null, title, side] — both perspectives share the
-// same 7 categories (schemas.PerspectiveBlueprint); ME's are shown as one
-// combined "About you" section rather than 7 separate subsections.
 export const GROUP_DEFS = [
   ['IDEAL_PARTNER', 'personality', 'PERSONALITY', 'Who they are'],
   ['IDEAL_PARTNER', 'lifestyle', 'LIFESTYLE', 'How they live'],
@@ -42,7 +44,6 @@ export const GROUP_DEFS = [
   ['ME', null, 'ABOUT YOU', 'What you revealed'],
 ];
 
-// [value, label, note]
 export const STRENGTHS = [
   ['hard_requirement', 'Non-negotiable', "I'd walk away over this"],
   ['strong_preference', 'Strongly matters', 'A lot, but not everything'],
@@ -57,7 +58,6 @@ export const STRENGTH_STYLE = {
   unknown: { dot: '#E2DED8', bg: 'rgba(47,74,63,.04)', fg: '#94A09A', label: 'OPEN' },
 };
 
-// [key, label, svg path]
 export const TABS = [
   ['home', 'Home', 'M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z'],
   ['convos', 'Conversations', 'M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z'],
@@ -66,7 +66,6 @@ export const TABS = [
   ['profile', 'You', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'],
 ];
 
-// Frontend-only static content (PRD §5 — no backend endpoint for this).
 export const STATIC_FRIENDS = [
   { initial: 'L', name: 'Léa', rel: 'Sister', quote: "She's thoughtful, adventurous, and will make you laugh every day." },
   { initial: 'T', name: 'Thomas', rel: 'Friend, 12 years', quote: 'Needs someone who can keep up with her, and who reads.' },
