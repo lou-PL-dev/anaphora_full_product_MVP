@@ -108,34 +108,43 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
     embedder = OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
 
     db = SessionLocal()
+    succeeded = 0
     try:
         if clear:
             db.query(Candidate).delete()
             db.commit()
 
         for i in range(n):
-            persona = generate_candidate_persona(rng, f"candidate-{i}", use_llm=True)
-            demo = demographics[i]
-            signal_dicts = [s.as_dict() for s in persona.signals]
-            embedding_text = persona_text(persona)
-            embedding = embedder.embed_query(embedding_text)
+            try:
+                persona = generate_candidate_persona(rng, f"candidate-{i}", use_llm=True)
+                demo = demographics[i]
+                signal_dicts = [s.as_dict() for s in persona.signals]
+                embedding_text = persona_text(persona)
+                embedding = embedder.embed_query(embedding_text)
 
-            db.add(Candidate(
-                name=demo["name"],
-                age=demo["age"],
-                gender=demo["gender"],
-                photo_url=demo["photo_url"],
-                narrative=persona.narrative,
-                signals=signal_dicts,
-                embedding=embedding,
-            ))
-            print(f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) — {len(signal_dicts)} signals")
-
-        db.commit()
+                db.add(Candidate(
+                    name=demo["name"],
+                    age=demo["age"],
+                    gender=demo["gender"],
+                    photo_url=demo["photo_url"],
+                    narrative=persona.narrative,
+                    signals=signal_dicts,
+                    embedding=embedding,
+                ))
+                # Committed per-candidate, not once at the end: each candidate
+                # costs real narrative + extraction + embedding API calls, so a
+                # late failure (DB hiccup, one bad API response) must not throw
+                # away every candidate generated before it in the same run.
+                db.commit()
+                succeeded += 1
+                print(f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) — {len(signal_dicts)} signals")
+            except Exception as e:
+                db.rollback()
+                print(f"  [{i + 1}/{n}] FAILED — {e!r} — continuing with the rest")
     finally:
         db.close()
 
-    return n
+    return succeeded
 
 
 def _main() -> None:
