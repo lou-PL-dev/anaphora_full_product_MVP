@@ -1,0 +1,10 @@
+# Python artifacts (anaphora_backend/, rag_demo/, dashboard/)
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local dev databases and env files
+*.db
+.env
+.env.local
