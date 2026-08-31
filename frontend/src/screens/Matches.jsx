@@ -1,18 +1,41 @@
 import PortraitSlot from '../components/PortraitSlot';
 import ErrorBanner from '../components/ErrorBanner';
 
-// Real RAG-matched candidates (see anaphora_backend/app/chains/matching_chain.py)
-// — a synthetic pool, not real users (see rag_demo/ingest_candidates.py).
-// No numeric score is ever shown (PRD §26, Match Presentation: "Anaphora
-// deliberately avoids presenting 92% compatible") — just a fit label and
-// the genuine, grounded reasons behind it. A candidate with nothing
-// genuine to say never reaches this screen at all (see matching_chain's
-// has_genuine_match filter) — there's no generic fallback text here.
 function initials(name) {
   return (name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
 const FIT_LABEL = { strong_fit: 'Strong fit', worth_exploring: 'Worth exploring' };
+
+function MatchLoading() {
+  return (
+    <div style={{ minHeight: '62vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '12px 14px 54px' }}>
+      <style>{`
+        @keyframes anaphoraFlowA { 0%,100% { transform: translate(-4px, 2px) rotate(-8deg) scale(1); } 50% { transform: translate(9px, -4px) rotate(-2deg) scale(1.04); } }
+        @keyframes anaphoraFlowB { 0%,100% { transform: translate(4px, 3px) rotate(8deg) scale(1); } 50% { transform: translate(-9px, -3px) rotate(2deg) scale(1.05); } }
+        @keyframes anaphoraLine { 0% { stroke-dashoffset: 90; opacity: .3; } 50% { opacity: .85; } 100% { stroke-dashoffset: -90; opacity: .3; } }
+      `}</style>
+
+      <div aria-hidden="true" style={{ position: 'relative', width: 176, height: 126, marginBottom: 28 }}>
+        <div style={{ position: 'absolute', width: 112, height: 88, left: 5, top: 16, borderRadius: '56% 44% 60% 40% / 49% 57% 43% 51%', background: 'linear-gradient(145deg, rgba(221,234,230,.95), rgba(47,74,63,.20))', filter: 'blur(.3px)', animation: 'anaphoraFlowA 4.8s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 108, height: 84, right: 5, top: 20, borderRadius: '43% 57% 44% 56% / 58% 43% 57% 42%', background: 'linear-gradient(145deg, rgba(166,154,205,.58), rgba(242,237,230,.72))', filter: 'blur(.3px)', animation: 'anaphoraFlowB 4.8s ease-in-out infinite' }} />
+        <svg viewBox="0 0 176 126" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+          <path d="M18 82 C48 25, 79 27, 91 62 S126 105, 158 48" fill="none" stroke="rgba(255,255,255,.92)" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="8 8" style={{ animation: 'anaphoraLine 4.8s linear infinite' }} />
+          <path d="M24 48 C56 103, 87 96, 96 66 S125 24, 153 74" fill="none" stroke="rgba(47,74,63,.20)" strokeWidth="1" strokeLinecap="round" strokeDasharray="6 9" style={{ animation: 'anaphoraLine 5.8s linear infinite reverse' }} />
+        </svg>
+      </div>
+
+      <div style={{ fontSize: 10.5, letterSpacing: '.18em', color: '#A69ACD', fontWeight: 600 }}>MAKING SENSE OF THE SIGNALS</div>
+      <div style={{ maxWidth: 330, marginTop: 12, fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.12, letterSpacing: '-.02em', color: '#2F4A3F' }}>
+        Looking for someone<br />worth meeting.
+      </div>
+      <div style={{ maxWidth: 300, marginTop: 15, fontSize: 13.5, lineHeight: 1.65, color: '#5C6B62' }}>
+        Anaphora is bringing together what you’ve shared, what you’ve discovered, and what matters most to you.
+      </div>
+      <div style={{ marginTop: 25, fontSize: 11.5, color: '#94A09A', fontStyle: 'italic' }}>Fewer introductions. Better reasons.</div>
+    </div>
+  );
+}
 
 function MatchCard({ match, primary }) {
   const { candidate, fit, sections } = match;
@@ -34,7 +57,7 @@ function MatchCard({ match, primary }) {
 
       {primary && (
         <div style={{ marginTop: 16, padding: 18, borderRadius: 18, background: '#F6F4FA' }}>
-          <div style={{ fontSize: 10, letterSpacing: '.14em', color: '#8C7FBE' }}>WHY ANAPHORA THINKS YOU SHOULD MEET</div>
+          <div style={{ fontSize: 10, letterSpacing: '.14em', color: '#A69ACD' }}>WHY ANAPHORA THINKS YOU SHOULD MEET</div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {shownSections.map((sec) => (
               <div key={sec.heading}>
@@ -69,7 +92,7 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
       <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Matches</div>
-          {!notReady && (
+          {!notReady && !loading && (
             <div style={{ marginTop: 6, fontSize: 12.5, color: '#94A09A' }}>
               {matches.length ? "We don't believe in perfect matches. We believe in meaningful fit." : 'Quality over volume.'}
             </div>
@@ -80,9 +103,7 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
       <ErrorBanner message={error} onRetry={onRetry} />
 
       <div style={{ padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {loading && (
-          <div style={{ padding: 30, textAlign: 'center', fontSize: 13, color: '#94A09A' }}>Finding your matches…</div>
-        )}
+        {loading && <MatchLoading />}
 
         {!loading && notReady && !error && (
           <div style={{ minHeight: '58vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 10px 48px' }}>
@@ -90,19 +111,9 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
               <div style={{ position: 'absolute', width: 94, height: 76, left: 4, top: 7, borderRadius: '54% 46% 58% 42% / 48% 58% 42% 52%', background: 'rgba(221,234,230,.92)', filter: 'blur(1px)', transform: 'rotate(-8deg)' }} />
               <div style={{ position: 'absolute', width: 90, height: 72, right: 3, bottom: 3, borderRadius: '45% 55% 42% 58% / 55% 43% 57% 45%', background: 'rgba(166,154,205,.34)', filter: 'blur(1px)', transform: 'rotate(9deg)' }} />
             </div>
-
-            <div style={{ maxWidth: 330, fontFamily: "'Playfair Display', serif", fontSize: 31, lineHeight: 1.12, letterSpacing: '-.02em', color: '#2F4A3F' }}>
-              A good introduction<br />starts with understanding.
-            </div>
-            <div style={{ maxWidth: 330, marginTop: 18, fontFamily: "'Inter', sans-serif", fontSize: 14.5, lineHeight: 1.7, color: '#5C6B62' }}>
-              Anaphora is still getting to know you — and the person who might feel right for you. Tell us a little more and complete your first Discovery before we start making introductions.
-            </div>
-            <button
-              onClick={goHome}
-              style={{ marginTop: 24, padding: '8px 4px', border: 'none', background: 'transparent', color: '#8C7FBE', fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
-            >
-              See what Anaphora still needs →
-            </button>
+            <div style={{ maxWidth: 330, fontFamily: "'Playfair Display', serif", fontSize: 31, lineHeight: 1.12, letterSpacing: '-.02em', color: '#2F4A3F' }}>A good introduction<br />starts with understanding.</div>
+            <div style={{ maxWidth: 330, marginTop: 18, fontFamily: "'Inter', sans-serif", fontSize: 14.5, lineHeight: 1.7, color: '#5C6B62' }}>Anaphora is still getting to know you — and the person who might feel right for you. Tell us a little more and complete your first Discovery before we start making introductions.</div>
+            <button onClick={goHome} style={{ marginTop: 24, padding: '8px 4px', border: 'none', background: 'transparent', color: '#A69ACD', fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>See what Anaphora still needs →</button>
           </div>
         )}
 
@@ -118,9 +129,7 @@ export default function Matches({ matches, loading, ready, error, onRetry, goHom
         {secondaryMatches.length > 0 && (
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             {secondaryMatches.map((m) => (
-              <div key={m.candidate.id} style={{ flex: '1 1 45%', minWidth: 130 }}>
-                <MatchCard match={m} />
-              </div>
+              <div key={m.candidate.id} style={{ flex: '1 1 45%', minWidth: 130 }}><MatchCard match={m} /></div>
             ))}
           </div>
         )}
