@@ -5,7 +5,7 @@ export default function Discovery({
   dqPrompt, dqIsChoice, dqOptions, dqIsSpectrum, dqLeft, dqRight, dqValue, onSpectrum, dqReading,
   dqIsText, dqTextValue, onTextAnswer, dqPlaceholder,
   dqOtherSelected, dqOtherValue, onOtherAnswer,
-  dqNextLabel, dqNextBg, discoveryNext, error,
+  dqNextLabel, dqNextBg, dqNextFg, dqNextDisabled, discoveryNext, error,
 }) {
   if (discoveryUnavailable) {
     return (
@@ -85,7 +85,7 @@ export default function Discovery({
       <ErrorBanner message={error} />
 
       <div style={{ padding: '12px 26px 26px' }}>
-        <button onClick={discoveryNext} style={{ width: '100%', padding: 17, border: 'none', borderRadius: 999, background: dqNextBg, color: '#F2EDE6', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>{dqNextLabel}</button>
+        <button disabled={dqNextDisabled} onClick={discoveryNext} style={{ width: '100%', padding: 17, border: 'none', borderRadius: 999, background: dqNextBg, color: dqNextFg || '#FFFFFF', fontSize: 15, fontWeight: 500, cursor: dqNextDisabled ? 'default' : 'pointer', opacity: 1 }}>{dqNextLabel}</button>
       </div>
     </div>
   );
