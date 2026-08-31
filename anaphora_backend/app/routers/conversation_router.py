@@ -8,7 +8,7 @@ from ..schemas import (
     ConversationStartResponse, ConversationMessageRequest, ConversationMessageResponse,
     ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut, PerspectiveBlueprint,
 )
-from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete, COMPLETION_MESSAGE
+from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete
 from ..chains.extraction_chain import extract_blueprint
 from ..readiness import compute_readiness
 
@@ -51,8 +51,8 @@ def send_message(
     return ConversationMessageResponse(
         reply=turn.reply,
         turn_count=user_turn_count(history),
-        ready_to_complete=is_ready_to_complete(history, turn.categories_covered),
-        categories_covered=turn.categories_covered,
+        ready_to_complete=is_ready_to_complete(history, turn.coverage),
+        coverage=turn.coverage,
     )
 
 
@@ -70,11 +70,8 @@ def complete_conversation(
 
     result = extract_blueprint(convo.messages)
 
-    # The Blueprint should reflect the latest conversation extraction, not
-    # accumulate duplicates across repeated completions. Clear prior
-    # conversation-sourced signals before inserting the new set — leave
-    # discovery-sourced signals untouched, since those come from a
-    # separate flow (PRD section 13: source = "conversation" | "discovery").
+    # Latest conversation replaces earlier conversation-sourced extraction;
+    # Discovery signals remain independent enrichment.
     db.query(BlueprintSignal).filter(
         BlueprintSignal.user_id == user.id,
         BlueprintSignal.source == "conversation",
@@ -96,7 +93,7 @@ def complete_conversation(
             db.add(signal)
             created.append(signal)
 
-    # Both perspectives share the same 7 categories (schemas.PerspectiveBlueprint).
+    # Symmetric storage: ME and IDEAL_PARTNER share exactly the same schema.
     for category in PerspectiveBlueprint.model_fields:
         _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
         _store("ME", category, getattr(result.me, category))
