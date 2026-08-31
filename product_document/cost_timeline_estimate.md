@@ -85,22 +85,71 @@ netlify.com/pricing before final submission.
 |---|---|---|
 | Render web service (backend) | $0 — spins down after ~15 min idle, ~50s cold start on wake | Starter, $7/mo — always-on, no cold start |
 | Render Postgres | $0 — **expires 30 days after creation**, needs monitoring or an upgrade before Round 2 demo week is out | Basic-256mb, $6/mo |
-| Netlify (frontend) | $0 — credit-based since April 2026 (300 credits/mo ≈ ~15GB effective bandwidth, no auto-recharge on exhaustion) | Personal, $9/mo |
-| **Total** | **$0/mo** | **$22/mo** |
+| Netlify (frontend) | $0 — credit-based since April 2026 (300 credits/mo, no auto-recharge on exhaustion) | Pro, $20/mo — see "Paris pilot" below for why Pro, not the cheaper Personal tier |
+| **Total** | **$0/mo** | **$33/mo** |
 
 ### Total monthly cost at different scales (LLM + hosting)
 
 | New users/month | LLM only | + free-tier hosting | + paid-tier hosting |
 |---|---|---|---|
-| 100 | $2.17 | $2.17 | $24.17 |
-| 1,000 | $21.70 | $21.70 | $43.70 |
-| 10,000 | $216.96 | $216.96 | $238.96 |
+| 100 | $2.17 | $2.17 | $35.17 |
+| 1,000 | $21.70 | $21.70 | $54.70 |
+| 10,000 | $216.96 | $216.96 | $249.96 |
 
 At current (near-zero) usage, hosting is the dominant cost, not LLM calls
 — that inverts somewhere between 1,000 and 10,000 new users/month, per
-the table above. The $22/mo paid-tier floor is worth budgeting for
+the table above. The $33/mo paid-tier floor is worth budgeting for
 regardless of LLM volume: it buys an always-on backend (no cold-start
 demo risk) and a Postgres instance that doesn't silently expire.
+
+### Paris pilot — will the free tiers actually hold up?
+
+Rather than guess a pilot traffic number, `pilot_scenario()` in the same
+script answers this from data that's actually real: measured file sizes
+in this repo, and this repo's own git history.
+
+**Bandwidth is fine.** Netlify's free tier gives ~15GB/month. A repeat
+visitor's session costs the gzipped JS+CSS bundle (61KB, from the actual
+`npm run build` output) plus however many real candidate photos they see
+— only 10 of the 50 seeded candidates have a real photo today (the rest
+render a free initials avatar), so a 5-match `/matches` response shows
+~1 real photo on average (206KB, the actual average size of the 10 files
+in `frontend/public/candidates/`). That's ~267KB/session — **~59,000
+sessions before the free bandwidth pool runs out.** Not the constraint.
+
+**Deploy credits are the real constraint.** The same 300 credits/month
+also pays for production deploys — 15 credits each, ~20 deploys/month.
+Netlify auto-deploys on every push to `main` that touches `frontend/` by
+default. This repo's own commit history over the last 2 days: **16
+frontend-touching commits, ~8/day.** At that pace, the free tier's
+20-deploy budget is gone in **~2.5 days** — not from real user traffic at
+all, just from active development. This is the actual argument for
+upgrading Netlify before a live pilot, not bandwidth: **Pro ($20/mo, 3,000
+credits ≈ 200 deploys/month)** gives real headroom at this dev pace;
+Personal ($9/mo, ~66 deploys/month) would still run out mid-pilot-week if
+development stays this active.
+
+### Other operational costs for a real pilot
+
+`OTHER_COSTS` in the script is deliberately structured to be extended —
+analytics is the first, concrete line item, added the way any future one
+would be:
+
+| Cost | Why | Price |
+|---|---|---|
+| Plausible Analytics (Starter) | EU-hosted, privacy-first, no cookie banner needed — matches the app's own "Privacy by design · EU-first" positioning better than a US-based analytics vendor would for a Paris pilot. Up to 10k pageviews/mo. | $9/mo |
+
+### Paris pilot fixed monthly floor
+
+| | Cost |
+|---|---|
+| Hosting (paid tier) | $33.00 |
+| Plausible Analytics | $9.00 |
+| **Fixed monthly floor** | **$42.00** |
+| + per-user-journey LLM cost on top | + $0.0217 × new users that month |
+
+E.g. a 300-signup first pilot month: $42 fixed + (300 × $0.0217) ≈ **$48.51
+total** — hosting and analytics dominate at this scale, not LLM calls.
 
 ### Assumptions log (everything not measured from real code)
 
@@ -122,3 +171,11 @@ demo risk) and a Postgres instance that doesn't silently expire.
 - No real usage data exists yet — every per-user assumption above is a
   labeled guess pending Wednesday's user testing session, which is exactly
   the point of that session: replace these guesses with real numbers.
+- The deploy-credit finding assumes Netlify is configured to auto-deploy
+  on every push to `main` (its default) — if a build filter/ignore rule is
+  already configured, the real number of deploys/month could be lower.
+  Worth checking directly in the Netlify dashboard's build settings.
+- The "~8 frontend commits/day" pace reflects active initial development
+  (today's session), not necessarily the steady-state rate during Round 2
+  or after — could be higher during the Tue–Thu build/testing sprint, or
+  lower once things stabilize.

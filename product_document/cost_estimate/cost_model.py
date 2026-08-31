@@ -51,11 +51,24 @@ HOSTING = {
     "render_postgres_free": 0.0,   # NOTE: expires 30 days after creation — needs monitoring
     "render_postgres_basic": 6.0,  # Basic-256mb, persists indefinitely
     "netlify_free": 0.0,           # credit-based since Apr 2026: 300 credits/mo, ~15GB effective bandwidth, no auto-recharge
-    "netlify_personal": 9.0,       # 1,000 credits/mo
+    "netlify_personal": 9.0,       # 1,000 credits/mo -> ~66 deploys/mo
+    "netlify_pro": 20.0,           # 3,000 credits/mo -> ~200 deploys/mo — see pilot_scenario(): deploy credits, not
+                                    # bandwidth, are the real constraint, and Personal's 66/mo is still tight at this
+                                    # repo's actual dev pace (~8 frontend-touching commits/day)
 }
 
 HOSTING_FREE_TOTAL = HOSTING["render_web_free"] + HOSTING["render_postgres_free"] + HOSTING["netlify_free"]
-HOSTING_PAID_TOTAL = HOSTING["render_web_starter"] + HOSTING["render_postgres_basic"] + HOSTING["netlify_personal"]
+HOSTING_PAID_TOTAL = HOSTING["render_web_starter"] + HOSTING["render_postgres_basic"] + HOSTING["netlify_pro"]
+
+# --- Other operational costs (extensible — analytics is the worked example,
+# add more line items the same way as the pilot needs them) -----------------
+# Plausible: EU-hosted, privacy-first, no cookie banner needed — matches the
+# app's own "Privacy by design · EU-first" positioning (Welcome screen copy)
+# better than a US-based analytics vendor would for a Paris pilot. Sourced
+# via web search on 2026-08-31; verify at plausible.io/#pricing.
+OTHER_COSTS = {
+    "plausible_analytics_starter": 9.0,  # up to 10k monthly pageviews
+}
 
 
 def count_tokens(text: str) -> int:
@@ -158,6 +171,63 @@ def candidate_ingestion_cost_per_candidate() -> float:
     return narrative_gen + extraction + embedding
 
 
+# --- Paris pilot scenario ---------------------------------------------------
+# The "will the free tiers hold up" question, answered with real measured
+# repo data rather than a guessed traffic number, plus a real observation
+# from this project's own git history.
+
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+
+# Gzip-transferred size of the built JS+CSS bundle — measured via
+# `cd frontend && npm run build` on 2026-08-31 (vite's own build output
+# reports this directly). Hardcoded with this provenance note rather than
+# re-running the build from this script, since that would make a cost
+# calculator depend on a full Node toolchain; re-measure if the frontend
+# changes meaningfully.
+BUNDLE_GZIP_KB = 60.67 + 0.60  # index.js + index.css, gzip
+
+
+def _candidate_photo_sizes_kb() -> list[float]:
+    """Real file sizes of whatever's actually in
+    frontend/public/candidates/ right now — not a guess, and it updates
+    automatically as more photos are added."""
+    candidates_dir = _FRONTEND_DIR / "public" / "candidates"
+    return [f.stat().st_size / 1024 for f in candidates_dir.glob("*.jpg")]
+
+
+def pilot_scenario():
+    photo_sizes = _candidate_photo_sizes_kb()
+    avg_photo_kb = sum(photo_sizes) / len(photo_sizes) if photo_sizes else 0
+    # Only ~20% of the 50-candidate pool has a real photo today (10/50, see
+    # ingest_candidates.py's PHOTO_FILES) — the rest render as a free
+    # initials avatar. k=5 matches returned per request (ASSUMPTIONS above)
+    # times that ratio is the expected real photos loaded per Matches view.
+    photos_per_session = ASSUMPTIONS["match_candidates_per_request"] * 0.20
+
+    bytes_per_repeat_session_kb = BUNDLE_GZIP_KB + photos_per_session * avg_photo_kb
+    netlify_free_gb = 15  # ~300 credits/mo at 20 credits/GB, per Netlify's Apr-2026 credit model
+    netlify_free_kb = netlify_free_gb * 1024 * 1024
+    sessions_to_exhaust_bandwidth = netlify_free_kb / bytes_per_repeat_session_kb
+
+    # Deploy credits are the OTHER thing 300 credits/mo buys (15 credits per
+    # production deploy ≈ 20 deploys/mo budget) — and unlike bandwidth,
+    # THIS is the one that's actually tight, per this repo's own commit
+    # history: every push to main that touches frontend/ triggers a Netlify
+    # auto-deploy by default.
+    frontend_commits_2days = 16  # git log --since="2026-08-30 00:00" --oneline -- frontend/ | wc -l
+    frontend_commits_per_day = frontend_commits_2days / 2
+    netlify_deploy_budget = 300 // 15  # 20 deploys/mo
+    days_to_exhaust_deploys = netlify_deploy_budget / frontend_commits_per_day
+
+    return {
+        "avg_photo_kb": avg_photo_kb,
+        "bytes_per_repeat_session_kb": bytes_per_repeat_session_kb,
+        "sessions_to_exhaust_bandwidth": sessions_to_exhaust_bandwidth,
+        "frontend_commits_per_day": frontend_commits_per_day,
+        "days_to_exhaust_deploys": days_to_exhaust_deploys,
+    }
+
+
 def main():
     conv_c, conv_d = conversation_cost()
     ext_c, _ = extraction_cost()
@@ -187,13 +257,32 @@ def main():
     print(f"  Paid tier (recommended once traffic is real): ${HOSTING_PAID_TOTAL:.2f}/mo")
     print(f"    Render web Starter:        ${HOSTING['render_web_starter']:.2f}")
     print(f"    Render Postgres Basic:     ${HOSTING['render_postgres_basic']:.2f}")
-    print(f"    Netlify Personal:          ${HOSTING['netlify_personal']:.2f}")
+    print(f"    Netlify Pro:               ${HOSTING['netlify_pro']:.2f}")
 
     print("\n=== Total monthly cost at different new-user scales (LLM + hosting) ===")
     print(f"  {'new users/mo':>13}  {'LLM only':>10}  {'+ free hosting':>15}  {'+ paid hosting':>15}")
     for n in (100, 1_000, 10_000):
         llm = journey_cost * n
         print(f"  {n:>13}  ${llm:>9.2f}  ${llm + HOSTING_FREE_TOTAL:>14.2f}  ${llm + HOSTING_PAID_TOTAL:>14.2f}")
+
+    print("\n=== Paris pilot: will the free tiers actually hold up? ===")
+    pilot = pilot_scenario()
+    print(f"  Avg real candidate photo size (measured from frontend/public/candidates/): {pilot['avg_photo_kb']:.0f} KB")
+    print(f"  Bandwidth per repeat session (bundle + expected real photos):  {pilot['bytes_per_repeat_session_kb']:.0f} KB")
+    print(f"  -> sessions to exhaust Netlify's 15GB free bandwidth pool:     {pilot['sessions_to_exhaust_bandwidth']:,.0f}")
+    print(f"     Bandwidth is comfortably NOT the constraint at pilot scale.")
+    print(f"  Frontend-touching commits/day, this repo's actual history:    {pilot['frontend_commits_per_day']:.1f}")
+    print(f"  Netlify free tier's deploy budget: 300 credits / 15 per deploy = 20 deploys/mo")
+    print(f"  -> days of pushes at this pace before deploy credits run out:  {pilot['days_to_exhaust_deploys']:.1f}")
+    print(f"     THIS is the real free-tier constraint, not bandwidth.")
+
+    other_total = sum(OTHER_COSTS.values())
+    pilot_monthly_total = HOSTING_PAID_TOTAL + other_total
+    print(f"\n=== Paris pilot fixed monthly cost (hosting + other, excludes per-user LLM) ===")
+    print(f"  Hosting (paid tier, see above): ${HOSTING_PAID_TOTAL:.2f}")
+    for name, amount in OTHER_COSTS.items():
+        print(f"  {name}: ${amount:.2f}")
+    print(f"  TOTAL fixed monthly floor: ${pilot_monthly_total:.2f}  (+ ${journey_cost:.4f} per user journey on top)")
 
 
 if __name__ == "__main__":
