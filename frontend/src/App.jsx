@@ -142,8 +142,6 @@ export default function App() {
     const q = questions[dqIdx];
     if (answers[q.id] === undefined) return;
     if (dqIdx < questions.length - 1) { patch({ dqIdx: dqIdx + 1, error: null }); return; }
-    // The user is done. Return to Home immediately; synthesis and Blueprint
-    // persistence continue asynchronously and Home owns the progress state.
     patch({ screen: 'home', discoverySaving: true, discoverySaveError: false, error: null });
     submitDiscoveryInBackground(questions, answers);
   };
@@ -154,7 +152,16 @@ export default function App() {
 
   const pickGender = (v) => patch((prev) => ({ gender: v, readiness: prev.mode === 'live' ? prev.readiness : mockReadiness(prev.signals, prev.discoveryDone, v).total }));
   const onAge = (e) => patch({ ageMax: Number(e.target.value) });
-  const resetAll = () => patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null });
+  const resetAll = () => {
+    // "Start over" must also start over on the backend. The backend identifies
+    // anonymous users by this localStorage UUID, so keeping it reused old
+    // signals/preferences and made a visually fresh profile inherit stale
+    // readiness. Generate a new anonymous identity for a genuinely clean run.
+    const newUid = crypto.randomUUID ? crypto.randomUUID() : 'u-' + Date.now();
+    try { localStorage.setItem('anaphora_uid', newUid); } catch (e) { /* ignore */ }
+    uidRef.current = newUid;
+    patch({ screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], answers: {}, dqIdx: 0, discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false, turnCount: 0, readyToComplete: false, categoriesCovered: [], gender: null, matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null });
+  };
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
   const openPlans = () => patch({ plansOpen: true });
   const closePlans = () => patch({ plansOpen: false });
@@ -168,7 +175,7 @@ export default function App() {
     return { title, side, items };
   }).filter((g) => g.items.length);
   const br = mockReadiness(s.signals, s.discoveryDone, s.gender);
-  const readiness = s.mode === 'live' && s.readiness ? s.readiness : br.total;
+  const readiness = s.mode === 'live' ? s.readiness : br.total;
   const steps = [
     { key: 'convo', title: "Tell me who you're looking for", note: s.convoCompleted ? 'Blueprint created' : 'One conversation, about 3 minutes', done: s.convoCompleted, cta: s.convoCompleted ? 'Add more' : 'Start', onGo: s.convoCompleted ? go('convos') : beginConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving ? 'Adding insight to your Blueprint…' : (s.discoveryDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: s.discoveryDone, cta: s.discoverySaving ? 'Adding…' : (s.discoveryDone ? 'Done' : '2 min'), onGo: s.discoveryDone ? go('insight') : (s.discoverySaving ? () => {} : startDiscovery) },
