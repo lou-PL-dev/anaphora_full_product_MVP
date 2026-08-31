@@ -1,26 +1,28 @@
 import ErrorBanner from '../components/ErrorBanner';
 
 export default function Discovery({
-  discoveryUnavailable, discoveryBack, discoveryProgress, discoveryCounter,
+  discoveryUnavailable, discoveryBack, discoveryProgress, discoveryCounter, discoveryTitle,
   dqPrompt, dqIsChoice, dqOptions, dqIsSpectrum, dqLeft, dqRight, dqValue, onSpectrum, dqReading,
+  dqIsText, dqTextValue, onTextAnswer, dqPlaceholder,
+  dqOtherSelected, dqOtherValue, onOtherAnswer,
   dqNextLabel, dqNextBg, discoveryNext, error,
 }) {
   if (discoveryUnavailable) {
     return (
-      <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FBF9F6, #F2EDE6)' }}>
+      <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FFFFFF, #F2EDE6)' }}>
         <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 34px', textAlign: 'center' }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#2F4A3F' }}>Discovery isn't available</div>
-          <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>We couldn't load the questions from the backend. Check it's running, then come back to this screen.</div>
+          <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>We couldn’t load this Discovery. Try again in a moment.</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FBF9F6, #F2EDE6)' }}>
+    <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FFFFFF, #F2EDE6)' }}>
       <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
         <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(47,74,63,.1)', overflow: 'hidden' }}>
@@ -30,7 +32,7 @@ export default function Discovery({
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 26px 10px' }}>
-        <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#A69ACD' }}>WHAT KIND OF LIFE ARE YOU BUILDING?</div>
+        <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#A69ACD', textTransform: 'uppercase' }}>{discoveryTitle}</div>
         <div style={{ marginTop: 14, fontFamily: "'Playfair Display', serif", fontSize: 27, lineHeight: 1.25, color: '#2F4A3F', textWrap: 'pretty' }}>{dqPrompt}</div>
 
         {dqIsChoice && (
@@ -44,6 +46,16 @@ export default function Discovery({
                 {o.label}
               </button>
             ))}
+            {dqOtherSelected && (
+              <textarea
+                autoFocus
+                value={dqOtherValue}
+                onChange={onOtherAnswer}
+                rows={3}
+                placeholder="Tell Anaphora what fits better…"
+                style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', padding: '15px 17px', borderRadius: 16, border: '1.5px solid #A69ACD', background: '#FFFFFF', color: '#2F4A3F', fontFamily: "'Inter', sans-serif", fontSize: 14, lineHeight: 1.5, outline: 'none' }}
+              />
+            )}
           </div>
         )}
 
@@ -57,12 +69,23 @@ export default function Discovery({
             <div style={{ marginTop: 6, textAlign: 'center', fontSize: 12, color: '#94A09A' }}>Drag — there's no right answer.</div>
           </div>
         )}
+
+        {dqIsText && (
+          <textarea
+            autoFocus
+            value={dqTextValue}
+            onChange={onTextAnswer}
+            rows={6}
+            placeholder={dqPlaceholder || 'Write whatever comes to mind…'}
+            style={{ marginTop: 24, width: '100%', boxSizing: 'border-box', resize: 'vertical', padding: '17px 18px', borderRadius: 18, border: '1.5px solid rgba(47,74,63,.12)', background: '#FFFFFF', color: '#2F4A3F', fontFamily: "'Inter', sans-serif", fontSize: 14, lineHeight: 1.6, outline: 'none' }}
+          />
+        )}
       </div>
 
       <ErrorBanner message={error} />
 
       <div style={{ padding: '12px 26px 26px' }}>
-        <button onClick={discoveryNext} style={{ width: '100%', padding: 17, border: 'none', borderRadius: 999, background: dqNextBg, color: '#F6F2EC', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>{dqNextLabel}</button>
+        <button onClick={discoveryNext} style={{ width: '100%', padding: 17, border: 'none', borderRadius: 999, background: dqNextBg, color: '#F2EDE6', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>{dqNextLabel}</button>
       </div>
     </div>
   );
