@@ -1,22 +1,23 @@
+// Offline/demo fallback only. In live mode the backend /readiness result is
+// the single source of truth. Keep this mirror deliberately small and aligned
+// with anaphora_backend/app/readiness.py.
 import { WEIGHTS } from './data';
 
-// Mirrors anaphora_backend/app/readiness.py's compute_readiness so the UI
-// can show a readiness breakdown locally (the Profile screen's "READINESS
-// BREAKDOWN" list) without a round trip for every render.
-export function mockReadiness(signals, discoveryDone, gender) {
-  const has = (p, c) => signals.some((s) => s.perspective === p && (!c || s.category === c));
+const CORE = ['personality', 'lifestyle', 'physical_type', 'relationship_dynamic', 'love_language', 'dealbreakers', 'values'];
+const REQUIRED = ['personality', 'lifestyle', 'relationship_dynamic'];
+
+function sideReady(signals, perspective) {
+  const covered = new Set(signals.filter((s) => s.perspective === perspective && CORE.includes(s.category)).map((s) => s.category));
+  return REQUIRED.every((c) => covered.has(c)) && covered.size >= 5;
+}
+
+export function mockReadiness(signals, discoveryDone, basicPreferencesDone) {
   const met = {
-    ideal_partner_personality: has('IDEAL_PARTNER', 'personality'),
-    ideal_partner_lifestyle: has('IDEAL_PARTNER', 'lifestyle'),
-    ideal_partner_physical_type: has('IDEAL_PARTNER', 'physical_type'),
-    ideal_partner_relationship_dynamic: has('IDEAL_PARTNER', 'relationship_dynamic'),
-    ideal_partner_love_language: has('IDEAL_PARTNER', 'love_language'),
-    ideal_partner_dealbreakers: has('IDEAL_PARTNER', 'dealbreakers'),
-    about_you: has('ME', null),
+    basic_matching_preferences: !!basicPreferencesDone,
     discovery_completed: !!discoveryDone,
-    basic_matching_preferences: !!gender,
+    me_profile: sideReady(signals, 'ME'),
+    ideal_partner_profile: sideReady(signals, 'IDEAL_PARTNER'),
   };
-  let total = 0;
-  Object.keys(met).forEach((k) => { if (met[k]) total += WEIGHTS[k][0]; });
+  const total = Object.keys(met).reduce((sum, key) => sum + (met[key] ? WEIGHTS[key][0] : 0), 0);
   return { total, met };
 }
