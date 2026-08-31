@@ -1,95 +1,60 @@
-"""
-Exercises the full PRD section 37 demo scenario end-to-end against a real
-SQLite DB, with the three LLM call sites monkeypatched so it runs without
-network access. Run: python test_flow.py
-"""
+"""Manual end-to-end smoke harness. Run from anaphora_backend: python test_flow.py"""
 import os
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ConversationTurnResult, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+from app.schemas import ConversationTurnResult, ConversationCoverage, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+
+# Rich enough on both sides to satisfy the 30% ME + 30% IDEAL_PARTNER gates.
+def side(prefix):
+    return PerspectiveBlueprint(
+        personality=[SignalItem(label=f"{prefix} personality")],
+        lifestyle=[SignalItem(label=f"{prefix} lifestyle")],
+        physical_type=[SignalItem(label=f"{prefix} physical")],
+        relationship_dynamic=[SignalItem(label=f"{prefix} relationship")],
+        values=[SignalItem(label=f"{prefix} values")],
+    )
 
 FAKE_EXTRACTION = ExtractionResult(
-    ideal_partner=PerspectiveBlueprint(
-        personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm and funny")],
-        relationship_dynamic=[SignalItem(label="Emotionally communicative", strength=Strength.hard_requirement,
-                                          evidence_text="need someone who can actually talk about things")],
-        physical_type=[SignalItem(label="Dry humour", strength=Strength.preference, evidence_text="dry humour")],
-    ),
-    me=PerspectiveBlueprint(
-        relationship_dynamic=[SignalItem(label="Values presence over drama", strength=Strength.preference,
-                                          evidence_text="doesn't make everything dramatic")],
-    ),
-    narrative="Warm, funny, someone who can actually talk about things without making everything dramatic.",
+    ideal_partner=side("Ideal"),
+    me=side("Me"),
+    narrative="A grounded portrait of the person who could fit.",
 )
 
 FAKE_TURN = ConversationTurnResult(
-    key_points_just_shared=["warm", "funny"],
-    categories_covered=["personality"],
-    reply="What kind of humour really works for you?",
+    key_points_just_shared=["warm", "grounded"],
+    coverage=ConversationCoverage(
+        me=["personality", "lifestyle", "physical_type", "relationship_dynamic", "values"],
+        ideal_partner=["personality", "lifestyle", "physical_type", "relationship_dynamic", "values"],
+    ),
+    reply="That gives me a real sense of both sides. What matters most in everyday connection?",
 )
 
 with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
-     patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION), \
-     patch("app.chains.discovery_chain.synthesize_insight", return_value="You want strong roots without feeling stuck."):
-
+     patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION):
     from app.main import app
     client = TestClient(app)
     headers = {"X-Anaphora-User-Id": "test-user-louise"}
 
-    print("--- health ---")
-    r = client.get("/health"); print(r.status_code, r.json())
+    assert client.get("/health").status_code == 200
+    convo_id = client.post("/conversation/start", headers=headers).json()["conversation_id"]
 
-    print("--- start conversation ---")
-    r = client.post("/conversation/start", headers=headers)
-    print(r.status_code, r.json())
-    convo_id = r.json()["conversation_id"]
+    for msg in ["Someone warm.", "I am grounded too.", "We both need some independence."]:
+        r = client.post("/conversation/message", headers=headers, json={"conversation_id": convo_id, "message": msg})
+        assert r.status_code == 200
 
-    print("--- send 4 user turns ---")
-    for msg in ["Someone funny and warm, a little older than me.",
-                "Dry humour. Someone who can laugh at himself.",
-                "Present. I need someone who can actually talk about things but doesn't make everything dramatic.",
-                "Somewhere between settled and adventurous."]:
-        r = client.post("/conversation/message", headers=headers,
-                         json={"conversation_id": convo_id, "message": msg})
-        print(r.status_code, r.json())
-
-    print("--- complete conversation (runs extraction) ---")
     r = client.post("/conversation/complete", headers=headers, json={"conversation_id": convo_id})
-    print(r.status_code)
-    import json as _json
-    print(_json.dumps(r.json(), indent=2))
+    assert r.status_code == 200
+    # Conversation alone = both profile gates = 60%.
+    assert r.json()["readiness_pct"] == 60
 
-    print("--- get blueprint ---")
-    r = client.get("/blueprint", headers=headers)
-    print(r.status_code, len(r.json()["signals"]), "signals")
+    # Persisting basic preferences adds 20%.
+    r = client.patch("/profile/matching-preferences", headers=headers, json={
+        "gender_preference": "Men", "preferred_age_range": "35-47"
+    })
+    assert r.status_code == 200
+    assert r.json()["readiness_pct"] == 80
 
-    print("--- readiness after conversation ---")
-    r = client.get("/readiness", headers=headers)
-    print(r.status_code, r.json())
-
-    print("--- get discovery ---")
-    r = client.get("/discovery/life_you_are_building")
-    print(r.status_code, r.json()["title"])
-
-    print("--- respond to discovery ---")
-    r = client.post("/discovery/life_you_are_building/respond", headers=headers, json=[
-        {"user_id": "test-user-louise", "question_id": "saturday_2032", "response": "c"},
-        {"user_id": "test-user-louise", "question_id": "roots_freedom", "response": "Roots"},
-    ])
-    print(r.status_code)
-    print(_json.dumps(r.json(), indent=2))
-
-    print("--- readiness after discovery (should increase) ---")
-    r = client.get("/readiness", headers=headers)
-    print(r.status_code, r.json())
-
-    print("--- correct a signal ---")
-    signals = client.get("/blueprint", headers=headers).json()["signals"]
-    sig_id = signals[0]["id"]
-    r = client.patch(f"/blueprint/signal/{sig_id}", headers=headers, json={"label": "Corrected label"})
-    print(r.status_code, r.json())
-
-print("\nALL FLOWS COMPLETED")
+    print("SMOKE FLOW PASSED — 60% Blueprint + 20% preferences; Discovery completes the final gate.")
