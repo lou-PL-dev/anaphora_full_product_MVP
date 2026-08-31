@@ -6,44 +6,47 @@ export default function Blueprint({ goHome, groups, signalCount, narrative }) {
           <button onClick={goHome} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
           <div style={{ fontSize: 11, letterSpacing: '.16em', color: '#A69ACD' }}>RELATIONSHIP BLUEPRINT</div>
         </div>
-        <div style={{ marginTop: 14, fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.2, color: '#2F4A3F' }}>What I understood<br />about you</div>
+        <div style={{ marginTop: 14, fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.2, color: '#2F4A3F' }}>What I understood</div>
         <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>{signalCount} signals, drawn from your own words. Tap anything that isn't quite right.</div>
       </div>
 
       {narrative && (
         <div style={{ margin: '4px 22px 22px', padding: '22px 22px 24px', borderRadius: 22, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)', boxShadow: '0 8px 26px rgba(47,74,63,.05)' }}>
-          <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#8C7FBE' }}>THE PERSON I'M PICTURING</div>
+          <div style={{ fontSize: 10, letterSpacing: '.15em', color: '#8C7FBE' }}>THE PERSON I'M PICTURING<br />FOR YOU</div>
           <div style={{ marginTop: 12, fontFamily: "'Playfair Display', serif", fontSize: 15.5, lineHeight: 1.75, color: '#2F4A3F', whiteSpace: 'pre-wrap' }}>{narrative}</div>
         </div>
       )}
 
-      <div style={{ padding: '4px 22px 24px', display: 'flex', flexDirection: 'column', gap: 26 }}>
-        {groups.map((g) => (
-          <div key={g.title}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 10, borderBottom: '1px solid rgba(47,74,63,.1)' }}>
-              <span style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>{g.title}</span>
-              <span style={{ fontSize: 10, letterSpacing: '.1em', color: '#A69ACD' }}>{g.side}</span>
+      <div style={{ padding: '4px 22px 24px', display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {groups.map((g) => {
+          const isAboutYou = g.title === 'ABOUT YOU';
+          return (
+            <div key={g.title} style={{ padding: isAboutYou ? '17px 16px 4px' : '0', margin: isAboutYou ? '4px -2px 0' : '0', borderRadius: isAboutYou ? 20 : 0, background: isAboutYou ? 'rgba(221,234,230,.48)' : 'transparent', border: isAboutYou ? '1px solid rgba(47,74,63,.07)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingBottom: 10, borderBottom: '1px solid rgba(47,74,63,.1)' }}>
+                <span style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>{g.title}</span>
+                <span style={{ padding: '4px 8px', borderRadius: 999, fontSize: 9.5, letterSpacing: '.08em', color: isAboutYou ? '#2F4A3F' : '#7A6DAF', background: isAboutYou ? 'rgba(47,74,63,.08)' : 'rgba(166,154,205,.13)', whiteSpace: 'nowrap' }}>{isAboutYou ? 'YOU' : 'YOUR IDEAL PARTNER'}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {g.items.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={s.onEdit}
+                    style={{ width: '100%', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 4px', border: 'none', borderBottom: '1px solid rgba(47,74,63,.06)', background: 'transparent', cursor: 'pointer' }}
+                  >
+                    <span style={{ flex: 'none', marginTop: 6, width: 7, height: 7, borderRadius: '50%', background: s.dot }} />
+                    <span style={{ flex: 1 }}>
+                      <span style={{ display: 'block', fontSize: 14.5, color: '#2F4A3F', lineHeight: 1.4 }}>{s.label}</span>
+                      {s.evidence && (
+                        <span style={{ display: 'block', marginTop: 5, fontSize: 12, color: '#94A09A', fontStyle: 'italic', lineHeight: 1.5 }}>“{s.evidence}”</span>
+                      )}
+                    </span>
+                    <span style={{ flex: 'none', marginTop: 3, padding: '4px 9px', borderRadius: 999, background: s.pillBg, color: s.pillFg, fontSize: 10, letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{s.strengthLabel}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {g.items.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={s.onEdit}
-                  style={{ width: '100%', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start', padding: '14px 4px', border: 'none', borderBottom: '1px solid rgba(47,74,63,.06)', background: 'transparent', cursor: 'pointer' }}
-                >
-                  <span style={{ flex: 'none', marginTop: 6, width: 7, height: 7, borderRadius: '50%', background: s.dot }} />
-                  <span style={{ flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: 14.5, color: '#2F4A3F', lineHeight: 1.4 }}>{s.label}</span>
-                    {s.evidence && (
-                      <span style={{ display: 'block', marginTop: 5, fontSize: 12, color: '#94A09A', fontStyle: 'italic', lineHeight: 1.5 }}>“{s.evidence}”</span>
-                    )}
-                  </span>
-                  <span style={{ flex: 'none', marginTop: 3, padding: '4px 9px', borderRadius: 999, background: s.pillBg, color: s.pillFg, fontSize: 10, letterSpacing: '.04em', whiteSpace: 'nowrap' }}>{s.strengthLabel}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6' }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: '#2F4A3F', lineHeight: 1.35 }}>This grows with you</div>
