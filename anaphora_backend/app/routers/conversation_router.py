@@ -13,7 +13,6 @@ from ..chains.extraction_chain import extract_blueprint
 from ..readiness import compute_readiness
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
-
 OPENING_PROMPT = "Tell me about the person you'd love to meet."
 
 
@@ -27,11 +26,7 @@ def start_conversation(user: User = Depends(get_current_user), db: Session = Dep
 
 
 @router.post("/message", response_model=ConversationMessageResponse)
-def send_message(
-    body: ConversationMessageRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+def send_message(body: ConversationMessageRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     convo = db.get(Conversation, body.conversation_id)
     if not convo or convo.user_id != user.id:
         raise HTTPException(404, "Conversation not found")
@@ -40,10 +35,8 @@ def send_message(
 
     history = list(convo.messages)
     history.append({"role": "user", "content": body.message})
-
     turn = converse(history)
     history.append({"role": "assistant", "content": turn.reply})
-
     convo.messages = history
     db.add(convo)
     db.commit()
@@ -56,12 +49,12 @@ def send_message(
     )
 
 
+def _normalise_label(label: str) -> str:
+    return " ".join(label.lower().strip().split())
+
+
 @router.post("/complete", response_model=ConversationCompleteResponse)
-def complete_conversation(
-    body: ConversationCompleteRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+def complete_conversation(body: ConversationCompleteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     convo = db.get(Conversation, body.conversation_id)
     if not convo or convo.user_id != user.id:
         raise HTTPException(404, "Conversation not found")
@@ -70,17 +63,22 @@ def complete_conversation(
 
     result = extract_blueprint(convo.messages)
 
-    # Latest conversation replaces earlier conversation-sourced extraction;
-    # Discovery signals remain independent enrichment.
-    db.query(BlueprintSignal).filter(
-        BlueprintSignal.user_id == user.id,
-        BlueprintSignal.source == "conversation",
-    ).delete()
-
+    # Conversations are cumulative enrichment. Once the initial Blueprint is
+    # ready, "Talk to Anaphora" must deepen it rather than erase everything a
+    # previous conversation learned. Exact semantic duplicates are skipped;
+    # corrections remain handled explicitly through the signal PATCH endpoint.
+    existing = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
+    existing_keys = {
+        (s.perspective, s.category, _normalise_label(s.label))
+        for s in existing
+    }
     created: list[BlueprintSignal] = []
 
     def _store(perspective: str, category: str, items) -> None:
         for item in items:
+            key = (perspective, category, _normalise_label(item.label))
+            if key in existing_keys:
+                continue
             signal = BlueprintSignal(
                 user_id=user.id,
                 perspective=perspective,
@@ -92,15 +90,16 @@ def complete_conversation(
             )
             db.add(signal)
             created.append(signal)
+            existing_keys.add(key)
 
-    # Symmetric storage: ME and IDEAL_PARTNER share exactly the same schema.
     for category in PerspectiveBlueprint.model_fields:
         _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
         _store("ME", category, getattr(result.me, category))
 
+    # Keep the newest ideal-partner narrative; structured signals retain the
+    # cumulative history that matching actually consumes.
     user.blueprint_narrative = result.narrative
     db.add(user)
-
     convo.status = "completed"
     db.add(convo)
     db.commit()
@@ -108,7 +107,6 @@ def complete_conversation(
         db.refresh(s)
 
     readiness_pct, _ = compute_readiness(db, user.id)
-
     return ConversationCompleteResponse(
         signals=[BlueprintSignalOut.model_validate(s) for s in created],
         narrative=result.narrative,
