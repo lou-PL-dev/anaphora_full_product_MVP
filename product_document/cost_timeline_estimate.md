@@ -73,25 +73,34 @@ turns instead of resending them verbatim).
 synthetic candidate: **$0.0022/candidate** → 50 candidates ≈ **$0.11 total**,
 paid once, not recurring per user.
 
-### Monthly LLM cost at different scales
-
-| New users/month | Monthly LLM cost |
-|---|---|
-| 100 | $2.17 |
-| 1,000 | $21.70 |
-| 10,000 | $216.96 |
-
 ### Fixed hosting costs
 
-| Service | Current | Paid tier (if scaling) |
-|---|---|---|
-| Render web service (backend) | Free (spins down after ~15 min idle, ~50s cold start) | Starter, ~$7/mo — always-on, no cold start |
-| Render Postgres | Free tier — **note: Render's free Postgres now expires 30 days after creation**, needs monitoring or an upgrade before Round 2 demo week is out | Basic-256mb, ~$6/mo |
-| Netlify (frontend) | Free — credit-based since April 2026 (300 credits/mo ≈ ~15GB effective bandwidth, no auto-recharge on exhaustion) | Personal $9/mo or Pro $20/mo if traffic grows past the free credit pool |
+Computed in the same script (`HOSTING` dict), not a separate hand-typed
+table — sourced via web search (Render/Netlify's own pricing pages are
+JavaScript-rendered and couldn't be fetched directly from this
+environment), so spot-check against render.com/pricing and
+netlify.com/pricing before final submission.
 
-At current (near-zero) usage, hosting is the dominant cost, not LLM calls —
-that inverts once usage climbs into the thousands of users/month range,
-per the table above.
+| Service | Free tier (current) | Paid tier (if scaling) |
+|---|---|---|
+| Render web service (backend) | $0 — spins down after ~15 min idle, ~50s cold start on wake | Starter, $7/mo — always-on, no cold start |
+| Render Postgres | $0 — **expires 30 days after creation**, needs monitoring or an upgrade before Round 2 demo week is out | Basic-256mb, $6/mo |
+| Netlify (frontend) | $0 — credit-based since April 2026 (300 credits/mo ≈ ~15GB effective bandwidth, no auto-recharge on exhaustion) | Personal, $9/mo |
+| **Total** | **$0/mo** | **$22/mo** |
+
+### Total monthly cost at different scales (LLM + hosting)
+
+| New users/month | LLM only | + free-tier hosting | + paid-tier hosting |
+|---|---|---|---|
+| 100 | $2.17 | $2.17 | $24.17 |
+| 1,000 | $21.70 | $21.70 | $43.70 |
+| 10,000 | $216.96 | $216.96 | $238.96 |
+
+At current (near-zero) usage, hosting is the dominant cost, not LLM calls
+— that inverts somewhere between 1,000 and 10,000 new users/month, per
+the table above. The $22/mo paid-tier floor is worth budgeting for
+regardless of LLM volume: it buys an always-on backend (no cold-start
+demo risk) and a Postgres instance that doesn't silently expire.
 
 ### Assumptions log (everything not measured from real code)
 

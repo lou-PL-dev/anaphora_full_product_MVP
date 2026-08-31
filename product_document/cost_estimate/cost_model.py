@@ -39,6 +39,25 @@ PRICING = {
     "text-embedding-3-small": {"input": 0.02, "output": 0.0},
 }
 
+# --- Hosting ($/month, fixed regardless of usage within a tier) ------------
+# Sourced via web search (Render/Netlify's own pricing pages return
+# JavaScript-rendered content this environment's fetch tool couldn't parse
+# directly, so these come from aggregator pages current as of 2026-08-31)
+# — spot-check against render.com/pricing and netlify.com/pricing directly
+# before treating this as final.
+HOSTING = {
+    "render_web_free": 0.0,        # spins down after ~15 min idle, ~50s cold start on wake
+    "render_web_starter": 7.0,     # always-on, 0.5 vCPU / 512MB
+    "render_postgres_free": 0.0,   # NOTE: expires 30 days after creation — needs monitoring
+    "render_postgres_basic": 6.0,  # Basic-256mb, persists indefinitely
+    "netlify_free": 0.0,           # credit-based since Apr 2026: 300 credits/mo, ~15GB effective bandwidth, no auto-recharge
+    "netlify_personal": 9.0,       # 1,000 credits/mo
+}
+
+HOSTING_FREE_TOTAL = HOSTING["render_web_free"] + HOSTING["render_postgres_free"] + HOSTING["netlify_free"]
+HOSTING_PAID_TOTAL = HOSTING["render_web_starter"] + HOSTING["render_postgres_basic"] + HOSTING["netlify_personal"]
+
+
 def count_tokens(text: str) -> int:
     """Approximates token count using OpenAI's own published rule of thumb
     (~4 characters per token for English text). tiktoken's exact BPE
@@ -163,9 +182,18 @@ def main():
     print(f"\n=== One-time candidate pool seeding ===")
     print(f"  per candidate: ${per_candidate:.5f}   x 50 candidates = ${per_candidate * 50:.4f}")
 
-    print("\n=== Monthly LLM cost at different new-user scales ===")
+    print("\n=== Fixed hosting costs ($/month) ===")
+    print(f"  Free tier (current):  ${HOSTING_FREE_TOTAL:.2f}/mo — but Render's free Postgres expires 30 days after creation")
+    print(f"  Paid tier (recommended once traffic is real): ${HOSTING_PAID_TOTAL:.2f}/mo")
+    print(f"    Render web Starter:        ${HOSTING['render_web_starter']:.2f}")
+    print(f"    Render Postgres Basic:     ${HOSTING['render_postgres_basic']:.2f}")
+    print(f"    Netlify Personal:          ${HOSTING['netlify_personal']:.2f}")
+
+    print("\n=== Total monthly cost at different new-user scales (LLM + hosting) ===")
+    print(f"  {'new users/mo':>13}  {'LLM only':>10}  {'+ free hosting':>15}  {'+ paid hosting':>15}")
     for n in (100, 1_000, 10_000):
-        print(f"  {n:>6} new users/month: ${journey_cost * n:>10.2f}")
+        llm = journey_cost * n
+        print(f"  {n:>13}  ${llm:>9.2f}  ${llm + HOSTING_FREE_TOTAL:>14.2f}  ${llm + HOSTING_PAID_TOTAL:>14.2f}")
 
 
 if __name__ == "__main__":
