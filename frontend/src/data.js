@@ -1,39 +1,48 @@
-// Fixed lookup tables the UI renders from.
+// Fixed lookup tables the UI renders from, plus STATIC_FRIENDS (the Friends
+// tab is frontend-only per the PRD — no backend endpoint). Matches is REAL
+// data now (see App.jsx::fetchMatches / anaphora_backend's /matches RAG
+// endpoint), not static content. There is deliberately no mock/demo
+// fallback content here: if the backend or an LLM call is unreachable, the
+// app surfaces a real error instead of substituting fabricated
+// conversation, signals, insights, or matches.
 
-// Readiness is a matching gate, not Blueprint depth. The backend is the
-// source of truth; these values are display labels for its four gates.
+// key -> [weight, label] — mirrors backend CATEGORY_WEIGHTS (readiness.py)
 export const WEIGHTS = {
-  basic_matching_preferences: [20, 'Basic matching preferences'],
-  discovery_completed: [20, 'A Discovery completed'],
-  me_profile: [30, 'Enough about you'],
-  ideal_partner_profile: [30, 'Enough about who you want'],
+  ideal_partner_personality: [10, 'Who they are'],
+  ideal_partner_lifestyle: [10, 'How they live'],
+  ideal_partner_physical_type: [10, 'What draws you'],
+  ideal_partner_relationship_dynamic: [10, 'What you need from a relationship'],
+  ideal_partner_love_language: [10, 'How they connect'],
+  ideal_partner_dealbreakers: [10, 'Dealbreakers'],
+  about_you: [10, 'About you'],
+  discovery_completed: [15, 'A Discovery completed'],
+  basic_matching_preferences: [15, 'Basic matching preferences'],
 };
 
-// Shared Blueprint dimensions. Conversation coverage is symmetric: the API
-// reports these separately for ME and IDEAL_PARTNER.
+// The 7 base categories the conversation steers toward — mirrors
+// BASE_CATEGORIES in anaphora_backend/app/chains/conversation_chain.py.
+// Used to turn `categories_covered` from /conversation/message into a
+// real progress readout instead of a raw turn count.
 export const BASE_CATEGORIES = [
   'personality', 'lifestyle', 'physical_type',
-  'relationship_dynamic', 'love_language', 'dealbreakers', 'values',
+  'relationship_dynamic', 'love_language', 'dealbreakers', 'about_you',
 ];
 
-// [perspective, category|null, title, side]
+// [perspective, category|null, title, side] — both perspectives share the
+// same 7 categories (schemas.PerspectiveBlueprint); ME's are shown as one
+// combined "About you" section rather than 7 separate subsections.
 export const GROUP_DEFS = [
   ['IDEAL_PARTNER', 'personality', 'PERSONALITY', 'Who they are'],
   ['IDEAL_PARTNER', 'lifestyle', 'LIFESTYLE', 'How they live'],
   ['IDEAL_PARTNER', 'physical_type', 'PHYSICAL TYPE', 'What draws you'],
   ['IDEAL_PARTNER', 'relationship_dynamic', 'RELATIONSHIP DYNAMIC', 'What you need'],
-  ['IDEAL_PARTNER', 'love_language', 'LOVE & AFFECTION', 'How they connect'],
+  ['IDEAL_PARTNER', 'love_language', 'LOVE LANGUAGE', 'How they connect'],
   ['IDEAL_PARTNER', 'dealbreakers', 'DEALBREAKERS', 'Non-negotiable'],
   ['IDEAL_PARTNER', 'values', 'VALUES', 'What matters'],
-  ['ME', 'personality', 'YOUR PERSONALITY', 'Who you are'],
-  ['ME', 'lifestyle', 'YOUR LIFESTYLE', 'How you live'],
-  ['ME', 'physical_type', 'YOUR PHYSICAL SELF', 'How you present'],
-  ['ME', 'relationship_dynamic', 'YOUR RELATIONSHIP STYLE', 'How you relate'],
-  ['ME', 'love_language', 'YOUR LOVE & AFFECTION STYLE', 'How you connect'],
-  ['ME', 'dealbreakers', 'YOUR CONTEXT', 'What materially matters'],
-  ['ME', 'values', 'YOUR VALUES', 'What matters to you'],
+  ['ME', null, 'ABOUT YOU', 'What you revealed'],
 ];
 
+// [value, label, note]
 export const STRENGTHS = [
   ['hard_requirement', 'Non-negotiable', "I'd walk away over this"],
   ['strong_preference', 'Strongly matters', 'A lot, but not everything'],
@@ -48,6 +57,7 @@ export const STRENGTH_STYLE = {
   unknown: { dot: '#E2DED8', bg: 'rgba(47,74,63,.04)', fg: '#94A09A', label: 'OPEN' },
 };
 
+// [key, label, svg path]
 export const TABS = [
   ['home', 'Home', 'M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z'],
   ['convos', 'Conversations', 'M21 12a8 8 0 0 1-8 8H7l-4 3 1.2-4.4A8 8 0 1 1 21 12z'],
@@ -56,6 +66,7 @@ export const TABS = [
   ['profile', 'You', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'],
 ];
 
+// Frontend-only static content (PRD §5 — no backend endpoint for this).
 export const STATIC_FRIENDS = [
   { initial: 'L', name: 'Léa', rel: 'Sister', quote: "She's thoughtful, adventurous, and will make you laugh every day." },
   { initial: 'T', name: 'Thomas', rel: 'Friend, 12 years', quote: 'Needs someone who can keep up with her, and who reads.' },

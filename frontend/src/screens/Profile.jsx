@@ -23,10 +23,12 @@ export default function Profile({ gender, onPickGender, ageMax, onAge, breakdown
 
       <div style={{ marginTop: 24, padding: 20, borderRadius: 20, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)' }}>
         <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>BASIC MATCHING PREFERENCES</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: '#94A09A' }}>Eligibility basics for introductions · 20% of matching readiness.</div>
+        <div style={{ marginTop: 6, fontSize: 12, color: '#94A09A' }}>Worth 10% of your readiness.</div>
         <div style={{ marginTop: 16, fontSize: 12.5, color: '#5C6B62' }}>Looking to meet</div>
         <div style={{ marginTop: 9, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {genderOptions.map((go) => <button key={go.label} onClick={go.onPick} style={{ padding: '10px 16px', borderRadius: 999, border: `1.5px solid ${go.border}`, background: go.bg, color: go.fg, fontSize: 12.5, cursor: 'pointer' }}>{go.label}</button>)}
+          {genderOptions.map((go) => (
+            <button key={go.label} onClick={go.onPick} style={{ padding: '10px 16px', borderRadius: 999, border: `1.5px solid ${go.border}`, background: go.bg, color: go.fg, fontSize: 12.5, cursor: 'pointer' }}>{go.label}</button>
+          ))}
         </div>
         <div style={{ marginTop: 20, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 12.5, color: '#5C6B62' }}>Age range · upper limit</span>
@@ -36,10 +38,15 @@ export default function Profile({ gender, onPickGender, ageMax, onAge, breakdown
       </div>
 
       <div style={{ marginTop: 14, padding: 20, borderRadius: 20, background: '#F2EDE6' }}>
-        <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>READY FOR INTRODUCTIONS WHEN</div>
-        <div style={{ marginTop: 7, fontSize: 12, lineHeight: 1.5, color: '#7B8780' }}>This measures whether Anaphora knows enough to match — not how deep your Blueprint can become.</div>
+        <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>READINESS BREAKDOWN</div>
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 11 }}>
-          {breakdown.map((b) => <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ flex: 'none', width: 16, height: 16, borderRadius: '50%', border: `1.5px solid ${b.ring}`, background: b.fill }} /><span style={{ flex: 1, fontSize: 12.5, color: '#2F4A3F' }}>{b.title}</span><span style={{ flex: 'none', fontSize: 11.5, color: '#94A09A' }}>{b.weight}%</span></div>)}
+          {breakdown.map((b) => (
+            <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ flex: 'none', width: 16, height: 16, borderRadius: '50%', border: `1.5px solid ${b.ring}`, background: b.fill }} />
+              <span style={{ flex: 1, fontSize: 12.5, color: '#2F4A3F' }}>{b.title}</span>
+              <span style={{ flex: 'none', fontSize: 11.5, color: '#94A09A' }}>{b.weight}%</span>
+            </div>
+          ))}
         </div>
       </div>
 
