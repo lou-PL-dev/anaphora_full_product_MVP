@@ -1,7 +1,7 @@
 import { WEIGHTS } from '../data';
 import { SAGE, LAV } from '../theme';
 
-export default function Profile({ gender, onPickGender, ageMax, onAge, breakdownMet, openPlans, resetAll }) {
+export default function Profile({ gender, onPickGender, ageMax, onAge, breakdownMet, openPlans, goPrivacy, goTerms }) {
   const genderOptions = ['Women', 'Men', 'Everyone'].map((g) => ({
     label: g,
     onPick: () => onPickGender(g),
@@ -55,8 +55,11 @@ export default function Profile({ gender, onPickGender, ageMax, onAge, breakdown
         <div style={{ marginTop: 6, fontSize: 12.5, color: '#4A5C53' }}>More Discoveries, deeper match explanations.</div>
       </button>
 
-      <button onClick={resetAll} style={{ marginTop: 22, width: '100%', padding: 15, borderRadius: 999, border: '1px solid rgba(47,74,63,.14)', background: 'transparent', color: '#5C6B62', fontSize: 13, cursor: 'pointer' }}>Start over</button>
-      <div style={{ marginTop: 18, textAlign: 'center', fontSize: 10.5, letterSpacing: '.05em', color: '#B3BCB7' }}>PRIVACY BY DESIGN · EU-FIRST · EXPLAINABLE AI</div>
+      <div style={{ marginTop: 22, textAlign: 'center', fontSize: 11, color: '#94A09A', letterSpacing: '.02em' }}>
+        <button onClick={goPrivacy} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', letterSpacing: 'inherit', color: '#8C7FBE', textDecoration: 'underline', cursor: 'pointer' }}>Privacy by design</button>
+        {' · '}
+        <button onClick={goTerms} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', letterSpacing: 'inherit', color: '#8C7FBE', textDecoration: 'underline', cursor: 'pointer' }}>The fine print</button>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export default function PhoneFrame({ framed, onToggleFrame, modeLabel, modeDot, children }) {
+export default function PhoneFrame({ framed, onToggleFrame, modeLabel, modeDot, onResetAll, children }) {
   const outerStyle = framed
     ? { position: 'relative', width: 400, height: 854, padding: 5, borderRadius: 58, background: 'linear-gradient(160deg, #1E2B25, #3A4A42)', boxShadow: '0 40px 90px rgba(31,45,38,.34), 0 0 0 1px rgba(0,0,0,.2)' }
     : { position: 'relative', width: '100%', maxWidth: 430, height: '100vh' };
@@ -17,6 +17,12 @@ export default function PhoneFrame({ framed, onToggleFrame, modeLabel, modeDot, 
           style={{ padding: '8px 14px', borderRadius: 999, border: '1px solid rgba(47,74,63,.12)', background: 'rgba(255,255,255,.72)', color: '#2F4A3F', fontSize: 11, letterSpacing: '.04em', cursor: 'pointer', backdropFilter: 'blur(8px)' }}
         >
           {framed ? 'Bare viewport' : 'Device frame'}
+        </button>
+        <button
+          onClick={onResetAll}
+          style={{ padding: '8px 14px', borderRadius: 999, border: '1px solid rgba(47,74,63,.12)', background: 'rgba(255,255,255,.72)', color: '#2F4A3F', fontSize: 11, letterSpacing: '.04em', cursor: 'pointer', backdropFilter: 'blur(8px)' }}
+        >
+          Start over
         </button>
       </div>
 
