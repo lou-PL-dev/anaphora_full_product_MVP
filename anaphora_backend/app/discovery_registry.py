@@ -1,13 +1,4 @@
-"""Central registry for every implemented Anaphora Discovery.
-
-Adding a Discovery should require two things only:
-1. implement its questions + synthesis/signal mapping in app/chains/;
-2. register one DiscoverySpec below.
-
-The same registry powers both API lookup and database seeding, so a
-Discovery cannot be available in code while missing from the `discoveries`
-table (the production bug this module is designed to prevent).
-"""
+"""Central registry for every implemented Anaphora Discovery."""
 from dataclasses import dataclass
 from typing import Callable
 
@@ -19,6 +10,7 @@ from .chains.discovery_chain import (
     synthesize_insight as synthesize_life_insight,
     responses_to_signals as life_responses_to_signals,
 )
+from .chains.discovery_library import DISCOVERY_DEFINITIONS, make_signal_mapper, make_synthesizer
 
 
 @dataclass(frozen=True)
@@ -33,17 +25,37 @@ class DiscoverySpec:
     status: str = "active"
 
 
+# Keep the original life Discovery implementation intact, while making its
+# one choice question as open-ended as the rest of the library.
+_life_questions = []
+for q in LIFE_QUESTIONS:
+    copy = dict(q)
+    if copy.get("options"):
+        copy["options"] = list(copy["options"]) + [{"id": "other", "label": "Something else"}]
+    _life_questions.append(copy)
+
 DISCOVERIES: dict[str, DiscoverySpec] = {
     LIFE_ID: DiscoverySpec(
         id=LIFE_ID,
         title=LIFE_TITLE,
-        questions=LIFE_QUESTIONS,
+        questions=_life_questions,
         synthesize_insight=synthesize_life_insight,
         responses_to_signals=life_responses_to_signals,
         perspective="ME",
         category="lifestyle",
     ),
 }
+
+for discovery_id, definition in DISCOVERY_DEFINITIONS.items():
+    DISCOVERIES[discovery_id] = DiscoverySpec(
+        id=discovery_id,
+        title=definition["title"],
+        questions=definition["questions"],
+        synthesize_insight=make_synthesizer(definition["title"], definition["focus"]),
+        responses_to_signals=make_signal_mapper(definition["questions"]),
+        perspective="ME",
+        category=definition["category"],
+    )
 
 
 def get_discovery_spec(discovery_id: str) -> DiscoverySpec | None:
