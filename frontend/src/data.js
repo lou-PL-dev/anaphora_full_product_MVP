@@ -1,8 +1,10 @@
-// Fixed lookup tables the UI renders from, plus the static (non-fake, no
-// backend needed) Matches/Friends content — see STATIC_MATCHES/STATIC_FRIENDS
-// below. There is deliberately no mock/demo fallback content here: if the
-// backend or an LLM call is unreachable, the app surfaces a real error
-// instead of substituting fabricated conversation, signals, or insights.
+// Fixed lookup tables the UI renders from, plus STATIC_FRIENDS (the Friends
+// tab is frontend-only per the PRD — no backend endpoint). Matches is REAL
+// data now (see App.jsx::fetchMatches / anaphora_backend's /matches RAG
+// endpoint), not static content. There is deliberately no mock/demo
+// fallback content here: if the backend or an LLM call is unreachable, the
+// app surfaces a real error instead of substituting fabricated
+// conversation, signals, insights, or matches.
 
 // key -> [weight, label] — mirrors backend CATEGORY_WEIGHTS (readiness.py)
 export const WEIGHTS = {
@@ -64,25 +66,7 @@ export const TABS = [
   ['profile', 'You', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'],
 ];
 
-// Frontend-only static content (PRD §5 — no backend endpoints for these yet).
-export const STATIC_MATCHES = {
-  primary: {
-    name: 'Camille, 32', location: 'Nantes, France · 40 min away', fit: '92% Fit',
-    blurb: 'You value deep conversations and kindness. Camille does too.',
-    tags: ['Curious', 'Mindful', 'Adventurous'],
-  },
-  secondary: [
-    { name: 'Élise, 29', location: 'Rennes · 88% Fit' },
-    { name: 'Marion, 34', location: 'Angers · 85% Fit' },
-  ],
-  whyItems: [
-    { title: 'Shared values', body: 'Family, honesty, personal growth — three of your five value signals.' },
-    { title: 'Life rhythm', body: 'You both described weekends outdoors and quiet weeknights.' },
-    { title: 'What you need', body: 'Real conversation over small talk — you marked this non-negotiable.' },
-    { title: 'Your friends agree', body: 'Léa said you need someone who can keep up with you.' },
-  ],
-};
-
+// Frontend-only static content (PRD §5 — no backend endpoint for this).
 export const STATIC_FRIENDS = [
   { initial: 'L', name: 'Léa', rel: 'Sister', quote: "She's thoughtful, adventurous, and will make you laugh every day." },
   { initial: 'T', name: 'Thomas', rel: 'Friend, 12 years', quote: 'Needs someone who can keep up with her, and who reads.' },

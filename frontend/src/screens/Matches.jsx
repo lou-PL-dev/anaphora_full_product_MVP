@@ -1,53 +1,55 @@
 import PortraitSlot from '../components/PortraitSlot';
-import { STATIC_MATCHES } from '../data';
+import ErrorBanner from '../components/ErrorBanner';
 
-export default function Matches({ whyOpen, toggleWhy }) {
-  const { primary, secondary, whyItems } = STATIC_MATCHES;
-  const whyLabel = whyOpen ? 'Hide the reasoning' : 'Why this match?';
+// Real RAG-matched candidates (see anaphora_backend/app/chains/matching_chain.py)
+// — a synthetic pool, not real users (see rag_demo/ingest_candidates.py).
+// Candidates without a photo (most of the pool — only a handful have real
+// assets, see frontend/public/candidates/README.md) fall back to
+// PortraitSlot's initials label.
+function initials(name) {
+  return (name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+}
 
+function MatchCard({ match, whyOpen, toggleWhy, primary }) {
+  const { candidate, match_pct, shared_signals, explanation } = match;
   return (
-    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
-      <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Matches</div>
-          <div style={{ marginTop: 6, fontSize: 12.5, color: '#94A09A' }}>Two new this week. Quality over volume.</div>
+    <div style={{ padding: primary ? 18 : 14, borderRadius: primary ? 24 : 20, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)', boxShadow: primary ? '0 8px 26px rgba(47,74,63,.06)' : 'none' }}>
+      <div style={{ position: 'relative', height: primary ? 300 : 130 }}>
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: '56% 44% 48% 52% / 46% 50% 50% 54%', background: 'linear-gradient(140deg, rgba(166,154,205,.35), rgba(221,234,230,.6))' }}>
+          <PortraitSlot src={candidate.photo_url || undefined} label={initials(candidate.name)} />
         </div>
-        <button style={{ padding: '8px 12px', borderRadius: 999, border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', fontSize: 11, cursor: 'pointer' }}>Filters</button>
+        <div style={{ position: 'absolute', top: 12, right: 6, padding: '8px 14px', borderRadius: 999, background: 'rgba(166,154,205,.95)', color: '#FFFFFF', fontSize: 12, fontWeight: 500, pointerEvents: 'none' }}>{match_pct}% fit</div>
       </div>
+      <div style={{ marginTop: primary ? 16 : 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: primary ? 26 : 17, color: '#2F4A3F' }}>{candidate.name}</div>
+        {primary && <div style={{ fontSize: 13, color: '#94A09A' }}>{candidate.age}</div>}
+      </div>
+      {!primary && <div style={{ marginTop: 2, fontSize: 11, color: '#94A09A' }}>{candidate.age}</div>}
 
-      <div style={{ padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div style={{ padding: 18, borderRadius: 24, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)', boxShadow: '0 8px 26px rgba(47,74,63,.06)' }}>
-          <div style={{ position: 'relative', height: 300 }}>
-            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: '56% 44% 48% 52% / 46% 50% 50% 54%', background: 'linear-gradient(140deg, rgba(166,154,205,.35), rgba(221,234,230,.6))' }}>
-              <PortraitSlot label="Camille" />
-            </div>
-            <div style={{ position: 'absolute', top: 12, right: 6, padding: '8px 14px', borderRadius: 999, background: 'rgba(166,154,205,.95)', color: '#FFFFFF', fontSize: 12, fontWeight: 500, pointerEvents: 'none' }}>{primary.fit}</div>
-          </div>
-          <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, color: '#2F4A3F' }}>{primary.name}</div>
-          </div>
-          <div style={{ marginTop: 3, fontSize: 12.5, color: '#94A09A' }}>{primary.location}</div>
-          <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6, color: '#4A5C53', textWrap: 'pretty' }}>{primary.blurb}</div>
+      {primary && (
+        <>
+          <div style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6, color: '#4A5C53', textWrap: 'pretty' }}>{explanation}</div>
           <div style={{ marginTop: 14, display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-            {primary.tags.map((tag) => (
+            {shared_signals.slice(0, 6).map((tag) => (
               <span key={tag} style={{ padding: '7px 13px', borderRadius: 999, background: '#F2EDE6', color: '#5C6B62', fontSize: 11.5 }}>{tag}</span>
             ))}
           </div>
-          <button onClick={toggleWhy} style={{ marginTop: 16, width: '100%', padding: 14, borderRadius: 999, border: '1px solid rgba(166,154,205,.5)', background: 'rgba(166,154,205,.09)', color: '#8C7FBE', fontSize: 13, cursor: 'pointer' }}>{whyLabel}</button>
+          <button onClick={toggleWhy} style={{ marginTop: 16, width: '100%', padding: 14, borderRadius: 999, border: '1px solid rgba(166,154,205,.5)', background: 'rgba(166,154,205,.09)', color: '#8C7FBE', fontSize: 13, cursor: 'pointer' }}>
+            {whyOpen ? 'Hide the reasoning' : 'Why this match?'}
+          </button>
 
           {whyOpen && (
             <div style={{ marginTop: 14, padding: 18, borderRadius: 18, background: '#F6F4FA', animation: 'apRise .4s ease both' }}>
               <div style={{ fontSize: 10, letterSpacing: '.14em', color: '#8C7FBE' }}>WE FOCUSED ON WHAT MATTERS TO YOU</div>
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {whyItems.map((w) => (
-                  <div key={w.title} style={{ display: 'flex', gap: 11 }}>
+                {shared_signals.length ? shared_signals.map((label) => (
+                  <div key={label} style={{ display: 'flex', gap: 11 }}>
                     <span style={{ flex: 'none', marginTop: 5, width: 7, height: 7, borderRadius: '50%', background: '#A69ACD' }} />
-                    <span style={{ flex: 1 }}>
-                      <span style={{ display: 'block', fontSize: 13, color: '#2F4A3F' }}>{w.title}</span>
-                      <span style={{ display: 'block', marginTop: 3, fontSize: 12, lineHeight: 1.5, color: '#5C6B62' }}>{w.body}</span>
-                    </span>
+                    <span style={{ flex: 1, fontSize: 13, color: '#2F4A3F' }}>{label}</span>
                   </div>
-                ))}
+                )) : (
+                  <div style={{ fontSize: 12.5, color: '#5C6B62' }}>No exact overlaps yet, but the pattern of what {candidate.name} is looking for lines up with your Blueprint overall.</div>
+                )}
               </div>
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(47,74,63,.08)', fontSize: 11.5, color: '#94A09A' }}>Explainable AI — we show you why, not just who.</div>
             </div>
@@ -57,24 +59,66 @@ export default function Matches({ whyOpen, toggleWhy }) {
             <button style={{ flex: 1, padding: 15, borderRadius: 999, border: '1px solid rgba(47,74,63,.14)', background: 'transparent', color: '#5C6B62', fontSize: 13.5, cursor: 'pointer' }}>Not now</button>
             <button style={{ flex: 2, padding: 15, border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 13.5, fontWeight: 500, cursor: 'pointer' }}>Say hello</button>
           </div>
-        </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-        <div style={{ display: 'flex', gap: 14 }}>
-          {secondary.map((m, i) => (
-            <div key={m.name} style={{ flex: 1, padding: 14, borderRadius: 20, background: '#FFFFFF', border: '1px solid rgba(47,74,63,.08)' }}>
-              <div style={{ position: 'relative', height: 130, overflow: 'hidden', borderRadius: i === 0 ? '52% 48% 46% 54% / 48% 52% 48% 52%' : '46% 54% 52% 48% / 52% 46% 54% 48%', background: i === 0 ? 'linear-gradient(140deg, rgba(166,154,205,.3), rgba(221,234,230,.55))' : 'linear-gradient(140deg, rgba(221,234,230,.6), rgba(166,154,205,.3))' }}>
-                <PortraitSlot label="Portrait" />
+export default function Matches({ whyOpen, toggleWhy, matches, loading, convoCompleted, error, onRetry, goHome }) {
+  const [primaryMatch, ...secondaryMatches] = matches;
+
+  return (
+    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
+      <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Matches</div>
+          <div style={{ marginTop: 6, fontSize: 12.5, color: '#94A09A' }}>
+            {matches.length ? `${matches.length} matches found. Quality over volume.` : 'Quality over volume.'}
+          </div>
+        </div>
+      </div>
+
+      <ErrorBanner message={error} onRetry={onRetry} />
+
+      <div style={{ padding: '18px 22px 26px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {!convoCompleted && (
+          <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>Complete your Blueprint first</div>
+            <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>Matching needs to know who you're looking for before it can find anyone.</div>
+            <button onClick={goHome} style={{ marginTop: 14, padding: '10px 18px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 13, cursor: 'pointer' }}>Go to your Blueprint</button>
+          </div>
+        )}
+
+        {convoCompleted && loading && (
+          <div style={{ padding: 30, textAlign: 'center', fontSize: 13, color: '#94A09A' }}>Finding your matches…</div>
+        )}
+
+        {convoCompleted && !loading && matches.length === 0 && !error && (
+          <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>No matches yet</div>
+            <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>Tap Matches again once your Blueprint has a bit more in it.</div>
+          </div>
+        )}
+
+        {primaryMatch && <MatchCard match={primaryMatch} primary whyOpen={whyOpen} toggleWhy={toggleWhy} />}
+
+        {secondaryMatches.length > 0 && (
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {secondaryMatches.map((m) => (
+              <div key={m.candidate.id} style={{ flex: '1 1 45%', minWidth: 130 }}>
+                <MatchCard match={m} />
               </div>
-              <div style={{ marginTop: 12, fontFamily: "'Playfair Display', serif", fontSize: 17, color: '#2F4A3F' }}>{m.name}</div>
-              <div style={{ marginTop: 2, fontSize: 11, color: '#94A09A' }}>{m.location}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>That's all for now</div>
-          <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>We'd rather show you three people who make sense than three hundred who don't.</div>
-        </div>
+        {matches.length > 0 && (
+          <div style={{ padding: 20, borderRadius: 20, background: '#DDEAE6', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: '#2F4A3F' }}>That's all for now</div>
+            <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#4A5C53' }}>We'd rather show you a few people who make sense than hundreds who don't.</div>
+          </div>
+        )}
       </div>
     </div>
   );

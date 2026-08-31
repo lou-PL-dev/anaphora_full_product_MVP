@@ -156,6 +156,51 @@ class ReadinessResponse(BaseModel):
     breakdown: dict[str, dict]
 
 
+class CandidateOut(BaseModel):
+    id: str
+    name: str
+    age: int
+    gender: str
+    photo_url: Optional[str] = None
+    narrative: str
+
+    class Config:
+        from_attributes = True
+
+
+class MatchOut(BaseModel):
+    candidate: CandidateOut
+    match_pct: int
+    shared_signals: list[str] = Field(
+        description="Short labels both the user's ideal_partner signals and this candidate's own "
+        "signals agree on — the deterministic, non-hallucinated half of 'why this match'"
+    )
+    explanation: str = Field(description="A short, natural compatibility blurb grounded in shared_signals")
+
+
+class MatchListResponse(BaseModel):
+    matches: list[MatchOut]
+
+
+# --- LLM structured output for the matching chain's generation step --------
+
+class MatchExplanationItem(BaseModel):
+    candidate_id: str
+    explanation: str = Field(
+        description="One or two natural sentences on why this candidate could be a good match for "
+        "the user, grounded ONLY in the shared signals given for this candidate — never invent "
+        "compatibility details not present in the provided signals"
+    )
+
+
+class MatchExplanationsResult(BaseModel):
+    """Target schema for the matching chain's generation call — one LLM call
+    explains ALL retrieved candidates at once rather than one call per
+    candidate, same cost-conscious pattern as conversation_chain.converse()
+    returning reply + categories_covered together."""
+    explanations: list[MatchExplanationItem]
+
+
 class DiscoveryResponseIn(BaseModel):
     user_id: str
     question_id: str

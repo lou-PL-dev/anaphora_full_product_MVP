@@ -43,6 +43,14 @@ if str(_BACKEND_DIR) not in sys.path:
 # constant.
 OPENING_PROMPT = "Tell me about the person you'd love to meet."
 
+# Used only for CANDIDATE generation (see generate_candidate_persona below)
+# — a self-descriptive transcript needs a self-descriptive opening turn to
+# read coherently, even though extraction itself classifies ME vs
+# IDEAL_PARTNER by content, not by which question preceded it (see
+# extraction_chain.EXTRACTION_SYSTEM_PROMPT's "never confuse what the user
+# IS with what the user WANTS" rule — it doesn't depend on this string).
+OPENING_PROMPT_SELF = "Tell me a bit about yourself — who are you?"
+
 # --- style seeding (see dataset strategy part 2) ---------------------------
 # These are ORIGINALLY WRITTEN for this demo — not excerpts from OkCupid,
 # PersonalityCafe, or any other real dataset. No real person's text is
@@ -134,6 +142,58 @@ def generate_narrative_via_llm(trait_profile: dict) -> str:
     return llm.invoke(messages).content.strip()
 
 
+def build_self_narrative_prompt(trait_profile: dict, style_examples: list[str]) -> list[dict]:
+    """Same trait sampler and style-seeding approach as build_narrative_prompt,
+    but framed as the CANDIDATE describing THEMSELVES — used for RAG-matching
+    candidate profiles (see generate_candidate_persona), as opposed to
+    build_narrative_prompt's "who I'm looking for" framing used for the
+    original ideal-partner-describing personas."""
+    examples_block = "\n".join(f'- "{ex}"' for ex in style_examples)
+    system = (
+        "You write short, natural first-person dating-profile bios for a synthetic test "
+        "dataset, as if a real person were describing THEMSELVES to a matchmaking app. Write "
+        "ONE paragraph (3-5 sentences), casual and specific, never a list, never clinical or "
+        "like a personality-test report — a real person talking about who they are, not a "
+        "psychology summary.\n\n"
+        "Match the REGISTER of these examples (tone, specificity, imperfection) "
+        "— do NOT reuse their wording, topics, or details, they're style "
+        "reference only:\n" + examples_block
+    )
+    user = (
+        "Write a self-description for someone whose own personality would be described this "
+        "way: " + describe_trait_profile(trait_profile) + "\n\n"
+        "Translate those traits into ordinary, concrete language and specific little details "
+        "about how THEY live and act — never name a trait directly (no 'high conscientiousness', "
+        "no 'secure attachment'). Write it entirely in first person, about the speaker, not about "
+        "a partner they're looking for."
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def generate_self_narrative_via_llm(trait_profile: dict) -> str:
+    from app.config import settings
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(model=settings.openai_model, temperature=0.9, api_key=settings.openai_api_key)
+    messages = build_self_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES)
+    return llm.invoke(messages).content.strip()
+
+
+def offline_self_narrative(trait_profile: dict) -> str:
+    """No-LLM stand-in for build_self_narrative_prompt's output — same role
+    as offline_narrative() for the ideal-partner personas. Keeps the same
+    "who's X" construction BIG_FIVE_DESCRIPTIONS was written for (e.g.
+    "...but has firm limits" only reads correctly after "who's", not after
+    a bare "I'm")."""
+    bf = trait_profile["big_five"]
+    phrases = [BIG_FIVE_DESCRIPTIONS[(t, bf[t])] for t in BIG_FIVE_TRAITS]
+    attach = ATTACHMENT_DESCRIPTIONS[trait_profile["attachment_style"]]
+    return (
+        "I'm someone who's " + ", who's ".join(phrases) + ". "
+        f"In relationships I tend to be {attach}."
+    )
+
+
 def offline_narrative(trait_profile: dict) -> str:
     """Deterministic, no-LLM, no-network stand-in narrative — used by tests
     and by generate_persona(use_llm=False) so the rest of the pipeline is
@@ -188,6 +248,36 @@ def generate_persona(rng: random.Random, persona_id: str, use_llm: bool = True) 
 def generate_persona_pool(n: int, seed: int | None = None, use_llm: bool = True) -> list[Persona]:
     rng = random.Random(seed)
     return [generate_persona(rng, f"trait-grounded-{i}", use_llm=use_llm) for i in range(n)]
+
+
+def generate_candidate_persona(rng: random.Random, candidate_id: str, use_llm: bool = True) -> Persona:
+    """Like generate_persona, but for RAG-matching CANDIDATES: the narrative
+    describes who this persona IS (self-profile), not who they want — see
+    build_self_narrative_prompt. The candidate's own signals come from
+    result.me (not result.ideal_partner) for the same reason. Demographic
+    display fields (name/age/gender/photo) are NOT set here — that's
+    presentation-layer data, assigned by ingest_candidates.py, kept
+    separate from this trait/narrative/extraction generation step."""
+    from app.chains.extraction_chain import extract_blueprint
+
+    trait_profile = sample_trait_profile(rng)
+    narrative = generate_self_narrative_via_llm(trait_profile) if use_llm else offline_self_narrative(trait_profile)
+    history = [
+        {"role": "assistant", "content": OPENING_PROMPT_SELF},
+        {"role": "user", "content": narrative},
+    ]
+    result = extract_blueprint(history)
+    signals = [
+        Signal("ME", category, item.label, item.strength.value, item.evidence_text)
+        for category in type(result.me).model_fields
+        for item in getattr(result.me, category)
+    ]
+    return Persona(id=candidate_id, narrative=narrative, signals=signals)
+
+
+def generate_candidate_pool(n: int, seed: int | None = None, use_llm: bool = True) -> list[Persona]:
+    rng = random.Random(seed)
+    return [generate_candidate_persona(rng, f"candidate-{i}", use_llm=use_llm) for i in range(n)]
 
 
 def _main() -> None:

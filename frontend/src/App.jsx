@@ -14,7 +14,7 @@ import Insight from './screens/Insight';
 import Matches from './screens/Matches';
 import Friends from './screens/Friends';
 import Profile from './screens/Profile';
-import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT } from './api';
+import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT, TIMEOUT_MATCHES } from './api';
 import { mockReadiness } from './readiness';
 import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE } from './data';
 import { LAV, SAGE } from './theme';
@@ -31,6 +31,7 @@ const initialState = {
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false, whyOpen: false,
   gender: null, ageMax: 36,
+  matches: [], matchesLoading: false, matchesLoaded: false,
   // { screen: 'chat' | 'discovery', message: string } | null — a real
   // backend/LLM failure, surfaced in place rather than masked with
   // fabricated content.
@@ -122,6 +123,25 @@ export default function App() {
     }
   };
 
+  // --- matches (RAG matching against the synthetic candidate pool) ---
+  const fetchMatches = async () => {
+    patch({ matchesLoading: true, error: null });
+    const r = await api('GET', '/matches', undefined, TIMEOUT_MATCHES);
+    if (r) {
+      patch({ matches: r.matches, matchesLoading: false, matchesLoaded: true });
+    } else {
+      patch({ matchesLoading: false, error: { screen: 'matches', message: "Couldn't load your matches — check the backend is running, then try again." } });
+    }
+  };
+  const goMatches = () => {
+    patch({ screen: 'matches', whyOpen: false, error: null });
+    // Fetch once per session, not on every tab revisit — this call costs a
+    // real embedding + LLM generation, unlike the other tabs' static
+    // content. A completed Blueprint is required server-side anyway (see
+    // matching_router.get_matches), so there's nothing to fetch before that.
+    if (s.convoCompleted && !s.matchesLoaded && !s.matchesLoading) fetchMatches();
+  };
+
   // --- blueprint editing ---
   const openEdit = (sig) => () => patch({ editing: sig, editLabel: sig.label, editStrength: sig.strength });
   const closeEdit = () => patch({ editing: null });
@@ -182,6 +202,7 @@ export default function App() {
     screen: 'welcome', messages: [], signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
     answers: {}, dqIdx: 0, discoveryDone: false, convoCompleted: false, turnCount: 0,
     readyToComplete: false, categoriesCovered: [], gender: null,
+    matches: [], matchesLoading: false, matchesLoaded: false,
   });
 
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
@@ -319,7 +340,14 @@ export default function App() {
       screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />;
       break;
     case 'matches':
-      screenEl = <Matches whyOpen={s.whyOpen} toggleWhy={toggleWhy} />;
+      screenEl = (
+        <Matches
+          whyOpen={s.whyOpen} toggleWhy={toggleWhy}
+          matches={s.matches} loading={s.matchesLoading} convoCompleted={s.convoCompleted}
+          error={s.error && s.error.screen === 'matches' ? s.error.message : null}
+          onRetry={fetchMatches} goHome={go('home')}
+        />
+      );
       break;
     case 'friends':
       screenEl = <Friends />;
@@ -339,7 +367,7 @@ export default function App() {
   return (
     <PhoneFrame framed={s.framed} onToggleFrame={toggleFrame} modeLabel={modeLabel} modeDot={modeDot}>
       {screenEl}
-      {TAB_SCREENS.includes(s.screen) && <TabBar activeScreen={s.screen} onGo={(key) => go(key)()} />}
+      {TAB_SCREENS.includes(s.screen) && <TabBar activeScreen={s.screen} onGo={(key) => (key === 'matches' ? goMatches() : go(key)())} />}
       {s.editing && (
         <SignalEditSheet
           editLabel={s.editLabel} onEditLabel={onEditLabel}

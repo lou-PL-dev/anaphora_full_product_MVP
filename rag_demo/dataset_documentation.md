@@ -119,6 +119,40 @@ in the hundreds to low thousands for a meaningful test pool; this was not
 run at that scale here because doing so requires a real `OPENAI_API_KEY`
 (this environment had none — see Limitations).
 
+## Candidate profiles for RAG matching (`ingest_candidates.py`)
+
+A third generation mode, added alongside the two above, produces
+**candidate** profiles for the real `/matches` RAG feature in
+`anaphora_backend` (`app/chains/matching_chain.py`) — these are the pool
+retrieval actually runs against, not just a local demo of the retrieval
+mechanics.
+
+The key difference from the other two generators: `generate_candidate_persona`
+(`generate_personas.py`) writes the narrative as a **self**-description
+("who I am"), not "who I'm looking for" — and keeps the extraction's `me`
+signals (not `ideal_partner`) as the candidate's own profile. Same trait
+sampler, same real extraction chain, just the opposite framing, since a
+matching candidate needs to describe themselves, not describe who they
+want.
+
+`ingest_candidates.py` then:
+1. Generates N candidates this way.
+2. Assigns synthetic display metadata — name, age, gender, and (for a
+   handful of candidates) a photo path — presentation-layer data with no
+   bearing on the psychometric trait sampling, kept in this file rather
+   than in the trait-generation code.
+3. Computes a real OpenAI embedding (`text-embedding-3-small`) per
+   candidate over their narrative + signal labels.
+4. Writes everything into the live `candidates` table (Postgres/pgvector —
+   see `anaphora_backend/README.md`'s "RAG matching" section) via the
+   backend's own SQLAlchemy session — this is genuinely the seed data
+   `/matches` retrieves from, not a side artifact.
+
+Unlike `generated_personas.json` (deliberately not committed — see "Sample
+size" above), candidate data belongs in the real database, not a repo file,
+since it's live product data for a real feature rather than a test
+artifact.
+
 ## Known limitations
 
 - **Fully synthetic.** No real user or real dater's data appears anywhere

@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # tasks that gpt-4o-mini handles fine, so only this one call site's
     # cost goes up.
     openai_conversation_model: str = "gpt-4o"
+    # Used by both the matching chain (query-side, per /matches request) and
+    # rag_demo/ingest_candidates.py (candidate-side, at seed time) — kept
+    # here rather than duplicated as a magic string in both places, since
+    # query and candidate embeddings MUST come from the same model to be
+    # comparable at all.
+    embedding_model: str = "text-embedding-3-small"
 
     class Config:
         env_file = REPO_ROOT / ".env"

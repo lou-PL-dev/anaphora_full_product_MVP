@@ -23,6 +23,10 @@ export const TIMEOUT_QUICK = 45000;
 export const TIMEOUT_CHAT_REPLY = 20000;
 export const TIMEOUT_INSIGHT = 20000;
 export const TIMEOUT_EXTRACTION = 45000;
+// /matches does one embedding call plus one structured-output LLM call
+// (see matching_chain.generate_match_explanations) across several
+// candidates at once — similar shape to extraction, same headroom.
+export const TIMEOUT_MATCHES = 45000;
 
 const UID_KEY = 'anaphora_uid';
 
