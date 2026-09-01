@@ -16,6 +16,8 @@ Critical rule: NEVER confuse what the user IS with what the user WANTS. If the u
 "I'm quite independent and need a lot of time for myself," that is a signal about the user \
 themselves (perspective: ME), not a description of their ideal partner.
 
+Some long user turns may appear as an internal digest rather than the full raw message. Treat those digests as grounded working memory from that single user turn; use their retained verbatim evidence snippets for evidence_text and never invent details beyond the digest.
+
 STRUCTURED SIGNALS (ideal_partner and me — same 7 categories apply to both):
 - Assign each signal to the correct category: personality, lifestyle, physical_type, \
 relationship_dynamic, love_language, dealbreakers, or values.
@@ -43,7 +45,8 @@ def _format_transcript(history: list[dict]) -> str:
     lines = []
     for m in history:
         speaker = "User" if m["role"] == "user" else "Anaphora"
-        lines.append(f"{speaker}: {m['content']}")
+        content = m.get("processing_summary") or m["content"]
+        lines.append(f"{speaker}: {content}")
     return "\n".join(lines)
 
 
