@@ -47,13 +47,23 @@ MINIMUM_USER_TURNS = 4
 MAXIMUM_USER_TURNS = 16
 
 
+def _working_content(message: dict) -> str:
+    """Return compact processing memory when available, else raw content.
+
+    Long-message digests reduce repeated context load while the original raw
+    message remains stored verbatim in Conversation.messages.
+    """
+    return message.get("processing_summary") or message["content"]
+
+
 def _to_langchain_messages(history: list[dict]) -> list:
     messages = [SystemMessage(content=SYSTEM_PROMPT)]
     for m in history:
+        content = _working_content(m)
         if m["role"] == "user":
-            messages.append(HumanMessage(content=m["content"]))
+            messages.append(HumanMessage(content=content))
         else:
-            messages.append(AIMessage(content=m["content"]))
+            messages.append(AIMessage(content=content))
     return messages
 
 
@@ -78,7 +88,7 @@ If one side is already far more complete than the other, spend this entire conve
 
 
 def converse(history: list[dict], known_me: set[str] = frozenset(), known_ideal: set[str] = frozenset()) -> ConversationTurnResult:
-    """Recompute perspective-specific coverage from the full transcript every turn."""
+    """Recompute perspective-specific coverage from compact working history."""
     llm = ChatOpenAI(model=settings.openai_conversation_model, temperature=0.7, api_key=settings.openai_api_key)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
     messages = _to_langchain_messages(history)
