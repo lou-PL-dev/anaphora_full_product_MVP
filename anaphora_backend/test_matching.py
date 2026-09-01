@@ -3,8 +3,8 @@ Tests for the RAG matching feature (chains/matching_chain.py,
 routers/matching_router.py).
 
 pgvector retrieval itself still needs Postgres. These tests cover the
-deterministic overlap fallback, semantic reranking with mocked embeddings,
-grounded LLM judgment, and router guards.
+deterministic overlap fallback, reciprocal semantic reranking with mocked
+embeddings, grounded LLM judgment, and router guards.
 """
 from unittest.mock import MagicMock, patch
 
@@ -71,22 +71,19 @@ def test_semantic_reranker_prefers_multi_category_evidence():
     ]
     broad_only = Candidate(
         id="broad", name="Broad", age=32, gender="male", signals=[
-            {"category": "personality", "label": "Energetic and spontaneous"},
-            {"category": "lifestyle", "label": "Out most nights"},
-            {"category": "relationship_dynamic", "label": "Avoids difficult conversations"},
+            {"perspective": "ME", "category": "personality", "label": "Energetic and spontaneous"},
+            {"perspective": "ME", "category": "lifestyle", "label": "Out most nights"},
+            {"perspective": "ME", "category": "relationship_dynamic", "label": "Avoids difficult conversations"},
         ],
     )
     grounded = Candidate(
         id="grounded", name="Grounded", age=33, gender="male", signals=[
-            {"category": "personality", "label": "Even-keeled and calm"},
-            {"category": "lifestyle", "label": "Loves quiet nights at home"},
-            {"category": "relationship_dynamic", "label": "Works through conflict by talking"},
+            {"perspective": "ME", "category": "personality", "label": "Even-keeled and calm"},
+            {"perspective": "ME", "category": "lifestyle", "label": "Loves quiet nights at home"},
+            {"perspective": "ME", "category": "relationship_dynamic", "label": "Works through conflict by talking"},
         ],
     )
 
-    # One-hot-ish fake semantic space. Candidate 2 is close to each user's
-    # signal/category representation even though candidate 1 starts with a
-    # higher broad retrieval score.
     def fake_embed_documents(texts):
         vectors = []
         for text in texts:
@@ -109,13 +106,18 @@ def test_semantic_reranker_prefers_multi_category_evidence():
         )
 
     assert reranked[0][0].id == "grounded"
-    assert len(reranked[0][2]) >= 2
+    # tuple: candidate, reciprocal_score, forward_score, reverse_score,
+    # evidence_pairs, reciprocal_complete
+    assert len(reranked[0][4]) >= 2
+    assert reranked[0][3] is None  # legacy candidate has no IDEAL_PARTNER yet
 
 
 def test_semantic_reranker_caps_finalists():
     user_signals = [BlueprintSignal(category="personality", label="Warm", strength="preference", confidence=1.0)]
     candidates = [
-        (Candidate(id=f"c{i}", name=f"C{i}", age=30, gender="male", signals=[{"category": "personality", "label": "Warm"}]), 0.8)
+        (Candidate(id=f"c{i}", name=f"C{i}", age=30, gender="male", signals=[
+            {"perspective": "ME", "category": "personality", "label": "Warm"}
+        ]), 0.8)
         for i in range(FINALIST_SIZE + 3)
     ]
     mock_embedder = MagicMock()
@@ -143,7 +145,9 @@ def test_judge_and_explain_drops_sections_when_not_genuine():
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
     with patch("app.chains.matching_chain.ChatOpenAI", return_value=mock_llm):
-        judged = judge_and_explain_candidates("personality: warm", [(c1, ["personality: warm ↔ warm"])])
+        judged = judge_and_explain_candidates(
+            "personality: warm", [(c1, ["USER WANTS -> CANDIDATE IS: personality evidence"], True)]
+        )
 
     has_genuine, sections = judged["c1"]
     assert has_genuine is False
@@ -166,7 +170,8 @@ def test_judge_and_explain_uncovered_candidate_fails_closed():
 
     with patch("app.chains.matching_chain.ChatOpenAI", return_value=mock_llm):
         judged = judge_and_explain_candidates(
-            "personality: warm", [(c1, ["personality evidence"]), (c2, [])],
+            "personality: warm",
+            [(c1, ["USER WANTS -> CANDIDATE IS: personality evidence"], True), (c2, [], False)],
         )
 
     assert judged["c1"][0] is True
