@@ -1,7 +1,7 @@
-// Brand palette — Anaphora_brand.png / Claude Design export (Anaphora.dc.html).
+// Core brand palette — Anaphora brand board.
 export const SAGE = '#2F4A3F';
 export const LAV = '#A69ACD';
 export const LAV_DARK = '#8C7FBE';
-export const MUTED = '#A69ACD';
-export const CREAM = '#F2EDE6';
-export const BORDER = '#DDEAE6';
+export const SAND = '#F2EDE6';
+export const SKY = '#DDEAE6';
+export const CLOUD = '#FFFFFF';

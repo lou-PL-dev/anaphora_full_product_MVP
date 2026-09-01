@@ -1,9 +1,9 @@
 import { TABS } from '../data';
-import { LAV, SAGE } from '../theme';
+import { SAGE, LAV, SKY } from '../theme';
 
 export default function TabBar({ activeScreen, onGo }) {
   return (
-    <div style={{ flex: 'none', display: 'flex', padding: '10px 8px 26px', borderTop: '1px solid #DDEAE6', background: 'rgba(255,255,255,.96)', backdropFilter: 'blur(10px)' }}>
+    <div style={{ flex: 'none', display: 'flex', padding: '10px 8px 26px', borderTop: `1px solid ${SKY}`, background: 'rgba(255,255,255,.96)', backdropFilter: 'blur(10px)' }}>
       {TABS.map(([key, label, icon]) => {
         const active = activeScreen === key;
         const color = active ? SAGE : LAV;

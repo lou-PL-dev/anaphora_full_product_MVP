@@ -300,7 +300,7 @@ export default function App() {
   });
   const strengthOptions = STRENGTHS.map(([v, label, note]) => ({ key: v, label, note, onPick: pickStrength(v), border: s.editStrength === v ? accent : '#DDEAE6', bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF' }));
   const modeLabel = s.mode === 'live' ? 'Live backend' : (s.mode === 'offline' ? 'Backend offline' : 'Connecting…');
-  const modeDot = s.mode === 'live' ? '#4C8C6A' : (s.mode === 'offline' ? '#B04A3A' : '#C9C2B8');
+  const modeDot = s.mode === 'live' ? SAGE : (s.mode === 'offline' ? LAV : '#DDEAE6');
 
   let screenEl = null;
   switch (s.screen) {

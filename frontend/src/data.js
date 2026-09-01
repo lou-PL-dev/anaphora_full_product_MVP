@@ -53,9 +53,9 @@ export const STRENGTHS = [
 
 export const STRENGTH_STYLE = {
   hard_requirement: { dot: '#2F4A3F', bg: '#DDEAE6', fg: '#2F4A3F', label: 'NON-NEGOTIABLE' },
-  strong_preference: { dot: '#A69ACD', bg: 'rgba(166,154,205,.16)', fg: '#7A6DAF', label: 'STRONG' },
-  preference: { dot: '#DDEAE6', bg: 'rgba(47,74,63,.05)', fg: '#2F4A3F', label: 'PREFERENCE' },
-  unknown: { dot: '#E2DED8', bg: 'rgba(47,74,63,.04)', fg: '#A69ACD', label: 'OPEN' },
+  strong_preference: { dot: '#A69ACD', bg: 'rgba(166,154,205,.16)', fg: '#2F4A3F', label: 'STRONG' },
+  preference: { dot: '#DDEAE6', bg: '#DDEAE6', fg: '#2F4A3F', label: 'PREFERENCE' },
+  unknown: { dot: '#F2EDE6', bg: '#F2EDE6', fg: '#2F4A3F', label: 'OPEN' },
 };
 
 export const TABS = [

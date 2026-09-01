@@ -37,6 +37,37 @@ def test_shared_signals_empty_when_no_overlap():
     assert shared_signals([BlueprintSignal(label="Warm")], [{"label": "Cold"}]) == []
 
 
+def test_shared_signals_catches_paraphrased_overlap():
+    """Two independently-extracted labels for the same underlying trait
+    are almost never identical strings — shared_signals must still catch
+    real overlap like this, not just exact/case-insensitive matches."""
+    user_signals = [BlueprintSignal(label="Loves cooking at home")]
+    candidate_signals = [{"label": "Enjoys cooking at home together"}]
+    assert shared_signals(user_signals, candidate_signals) == ["Loves cooking at home"]
+
+
+def test_shared_signals_does_not_match_opposite_polarity_on_shared_word():
+    """A dealbreaker and the opposite preference sharing one topic word
+    ('commitment') must never register as a shared signal."""
+    user_signals = [BlueprintSignal(label="Loves commitment")]
+    candidate_signals = [{"label": "Avoids commitment"}]
+    assert shared_signals(user_signals, candidate_signals) == []
+
+
+def test_shared_signals_requires_more_than_one_shared_word():
+    """A single coincidentally shared word between otherwise-unrelated
+    short labels must not count as a genuine overlap."""
+    user_signals = [BlueprintSignal(label="Early riser")]
+    candidate_signals = [{"label": "Late riser"}]
+    assert shared_signals(user_signals, candidate_signals) == []
+
+
+def test_shared_signals_dedupes_and_preserves_user_order():
+    user_signals = [BlueprintSignal(label="Warm"), BlueprintSignal(label="Direct communicator")]
+    candidate_signals = [{"label": "warm"}, {"label": "Warm"}, {"label": "Direct communicator"}]
+    assert shared_signals(user_signals, candidate_signals) == ["Warm", "Direct communicator"]
+
+
 def test_judge_and_explain_empty_candidates_short_circuits():
     # No ChatOpenAI mock needed here — an empty candidate list must never
     # trigger an LLM call at all.
