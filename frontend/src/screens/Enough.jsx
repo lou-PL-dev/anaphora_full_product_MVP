@@ -1,5 +1,7 @@
-export default function Enough({ signalCount, goBlueprint, groups }) {
-  const enoughCopy = `From what you've shared, Anaphora already has a first picture of you — and of the person who could feel right for you.`;
+export default function Enough({ signalCount, goBlueprint, goHome, groups, isFollowUp }) {
+  const enoughCopy = isFollowUp
+    ? `What you just shared has been added to your Blueprint — Anaphora's picture of you keeps getting sharper.`
+    : `From what you've shared, Anaphora already has a first picture of you — and of the person who could feel right for you.`;
   const chips = groups.slice(0, 4).map((g) => g.title.charAt(0) + g.title.slice(1).toLowerCase());
 
   return (
@@ -34,6 +36,7 @@ export default function Enough({ signalCount, goBlueprint, groups }) {
         </div>
 
         <button onClick={goBlueprint} style={{ marginTop: 34, width: '100%', padding: 17, border: 'none', borderRadius: 999, background: '#F2EDE6', color: '#2F4A3F', fontSize: 15, fontWeight: 500, cursor: 'pointer' }}>See my Blueprint</button>
+        <button onClick={goHome} style={{ marginTop: 12, width: '100%', padding: 15, border: '1px solid rgba(242,237,230,.28)', borderRadius: 999, background: 'transparent', color: '#F2EDE6', fontSize: 14, cursor: 'pointer' }}>Back to Home</button>
       </div>
     </div>
   );

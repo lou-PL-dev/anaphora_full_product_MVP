@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useSpeechToText } from '../useSpeechToText';
 import ErrorBanner from '../components/ErrorBanner';
 
-export default function Chat({ goHome, messages, thinking, draft, onDraft, onDraftKey, sendMessage, readyToComplete, completeConversation, chatEndRef, setDraft, error, onRetryStart }) {
+export default function Chat({ goHome, messages, thinking, draft, onDraft, onDraftKey, sendMessage, turnCount, readyToComplete, isFollowUp, completeConversation, chatEndRef, setDraft, error, onRetryStart }) {
   const baseDraftRef = useRef('');
   const { listening, supported: voiceSupported, toggle: toggleVoice, stop: stopVoice } = useSpeechToText({ onTranscript: (transcript) => { const base = baseDraftRef.current; setDraft(base ? base + ' ' + transcript : transcript); } });
   const handleMicClick = () => { if (!listening) baseDraftRef.current = draft.trim(); toggleVoice(); };
@@ -20,7 +20,18 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
         {thinking && <div style={{ display: 'flex', gap: 10, alignItems: 'center', animation: 'apFade .3s ease both' }}><div style={{ flex: 'none', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(140deg, #A69ACD, #DDEAE6)' }} /><div style={{ padding: '14px 18px', borderRadius: '5px 20px 20px 20px', background: '#FFFFFF', border: '1px solid rgba(47,74,63,.07)', color: '#94A09A', fontSize: 12 }}>Thinking…</div></div>}
         <div ref={chatEndRef} />
       </div>
-      {readyToComplete && !thinking && <div style={{ padding: '0 20px 10px' }}><button onClick={completeConversation} style={{ width: '100%', padding: 15, border: 'none', borderRadius: 999, background: '#A69ACD', color: '#FFFFFF', fontSize: 14, fontWeight: 500, cursor: 'pointer', boxShadow: '0 8px 22px rgba(166,154,205,.28)', animation: 'apRise .5s ease both' }}>Create my Blueprint</button></div>}
+      {turnCount > 0 && !thinking && (
+        <div style={{ padding: '0 20px 10px' }}>
+          <button onClick={completeConversation} style={{ width: '100%', padding: 15, border: 'none', borderRadius: 999, background: '#A69ACD', color: '#FFFFFF', fontSize: 14, fontWeight: 500, cursor: 'pointer', boxShadow: '0 8px 22px rgba(166,154,205,.28)', animation: 'apRise .5s ease both' }}>
+            {isFollowUp ? 'Add to my Blueprint' : 'Create my Blueprint'}
+          </button>
+          {!readyToComplete && (
+            <div style={{ marginTop: 8, textAlign: 'center', fontSize: 11.5, color: '#94A09A' }}>
+              You can save what you've shared any time — keep going for a fuller picture, or save now.
+            </div>
+          )}
+        </div>
+      )}
       <ErrorBanner message={error} onRetry={onRetryStart} />
       <div style={{ padding: '10px 16px 18px', borderTop: '1px solid rgba(47,74,63,.07)', display: 'flex', gap: 10, alignItems: 'flex-end', background: '#FFFFFF' }}>
         <textarea value={draft} onChange={onDraft} onKeyDown={handleDraftKey} rows={1} placeholder={listening ? 'Listening…' : 'Type your answer…'} style={{ flex: 1, resize: 'none', padding: '13px 16px', borderRadius: 22, border: `1px solid ${listening ? '#A69ACD' : 'rgba(47,74,63,.14)'}`, background: '#FFFFFF', fontSize: 14, lineHeight: 1.5, color: '#2F4A3F', maxHeight: 96, outline: 'none', transition: 'border-color .2s' }} />

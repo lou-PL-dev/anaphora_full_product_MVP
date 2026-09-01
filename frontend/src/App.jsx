@@ -27,7 +27,7 @@ const initialState = {
   screen: 'welcome', framed: false, mode: 'checking',
   convoId: null, messages: [], draft: '', thinking: false,
   turnCount: 0, readyToComplete: false, categoriesCovered: [],
-  signals: [], readiness: 0, narrative: '', insight: '', newSignals: [],
+  signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], hasExistingBlueprint: false, wasFollowUp: false,
   discoveryId: DEFAULT_DISCOVERY_ID, discoveryTitle: '', discoveryReturnScreen: 'home', discoveryLoading: false,
   questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [],
   discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
@@ -58,7 +58,7 @@ export default function App() {
     // Rehydrate everything the backend already knows for this device's uid,
     // so a page reload doesn't visually reset progress that still exists.
     api('GET', '/blueprint').then((r) => {
-      if (r) patch({ signals: r.signals || [], narrative: r.narrative || '' });
+      if (r) patch({ signals: r.signals || [], narrative: r.narrative || '', hasExistingBlueprint: !!(r.signals && r.signals.length) });
     });
     api('GET', '/readiness').then((r) => {
       if (!r) return;
@@ -111,9 +111,26 @@ export default function App() {
   };
   const completeConversation = async () => {
     patch({ error: null });
+    const wasFollowUp = s.hasExistingBlueprint;
     const r = await api('POST', '/conversation/complete', { conversation_id: s.convoId }, TIMEOUT_EXTRACTION);
-    if (r) patch({ signals: r.signals, narrative: r.narrative, readiness: r.readiness_pct, convoCompleted: true, screen: 'enough' });
-    else patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap “Create my Blueprint” to try again." } });
+    if (r) {
+      // r.signals/r.narrative are only this completion's own delta (a follow-up
+      // "Add more" conversation replaces just its own categories server-side,
+      // per-category, and appends to the narrative) — re-fetch the full,
+      // merged picture so Home/Blueprint don't regress to a partial view.
+      const full = await api('GET', '/blueprint');
+      patch({
+        signals: full ? full.signals || [] : r.signals,
+        narrative: full ? full.narrative || '' : r.narrative,
+        readiness: r.readiness_pct,
+        convoCompleted: true,
+        hasExistingBlueprint: true,
+        wasFollowUp,
+        screen: 'enough',
+      });
+    } else {
+      patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap the button to try again." } });
+    }
   };
 
   const fetchMatches = async () => {
@@ -271,8 +288,8 @@ export default function App() {
   switch (s.screen) {
     case 'welcome': screenEl = <Welcome onBegin={beginConversation} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
     case 'legal': screenEl = <Legal goBack={go('welcome')} section={s.legalSection} />; break;
-    case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} readyToComplete={s.readyToComplete} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
-    case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} groups={groups} />; break;
+    case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} turnCount={s.turnCount} readyToComplete={s.readyToComplete} isFollowUp={s.hasExistingBlueprint} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
+    case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} goHome={go('home')} groups={groups} isFollowUp={s.wasFollowUp} />; break;
     case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />; break;
     case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} />; break;
     case 'convos': screenEl = <Convos convoStatus={s.convoCompleted ? 'Completed · ' + s.turnCount + ' turns' : (s.messages.length ? 'In progress' : 'Not started')} convoCta={s.convoCompleted ? 'Continue' : (s.messages.length ? 'Resume' : 'Start')} resumeConversation={resumeConversation} discoveries={discoveries} startDiscovery={startDiscovery} />; break;
