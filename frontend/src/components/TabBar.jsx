@@ -1,12 +1,12 @@
 import { TABS } from '../data';
-import { SAGE } from '../theme';
+import { SAGE, LAV, SKY } from '../theme';
 
 export default function TabBar({ activeScreen, onGo }) {
   return (
-    <div style={{ flex: 'none', display: 'flex', padding: '10px 8px 26px', borderTop: '1px solid rgba(47,74,63,.08)', background: 'rgba(255,255,255,.96)', backdropFilter: 'blur(10px)' }}>
+    <div style={{ flex: 'none', display: 'flex', padding: '10px 8px 26px', borderTop: `1px solid ${SKY}`, background: 'rgba(255,255,255,.96)', backdropFilter: 'blur(10px)' }}>
       {TABS.map(([key, label, icon]) => {
         const active = activeScreen === key;
-        const color = active ? SAGE : '#AEB8B2';
+        const color = active ? SAGE : LAV;
         const isIntros = key === 'matches';
         return (
           <button
