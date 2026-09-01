@@ -1,6 +1,6 @@
 export default function Convos({ convoStatus, convoCta, resumeConversation, discoveries, startDiscovery }) {
   return (
-    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FFFFFF', padding: '64px 22px 24px' }}>
+    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'linear-gradient(180deg, #F2EDE6 0%, #FFFFFF 42%, #F2EDE6 100%)', padding: '64px 22px 24px' }}>
       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Conversations</div>
       <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>Share only what feels useful.</div>
 
@@ -27,11 +27,11 @@ export default function Convos({ convoStatus, convoCta, resumeConversation, disc
           <button
             key={d.id}
             onClick={() => startDiscovery(d.id, 'convos')}
-            style={{ width: '100%', textAlign: 'left', padding: 18, borderRadius: 20, border: '1px solid #DDEAE6', background: d.done ? '#DDEAE6' : '#FFFFFF', cursor: 'pointer' }}
+            style={{ width: '100%', textAlign: 'left', padding: 18, borderRadius: 20, border: `1px solid ${d.done ? '#A69ACD' : '#DDEAE6'}`, background: d.done ? 'linear-gradient(145deg, #F2EDE6 0%, #FFFFFF 100%)' : '#FFFFFF', cursor: 'pointer' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ fontSize: 10, letterSpacing: '.13em', color: '#A69ACD' }}>{d.deeper ? 'DEEPER REFLECTION' : `${d.questions} QUESTIONS · ${d.minutes} MIN`}</div>
-              <div style={{ padding: d.done ? '4px 8px' : 0, borderRadius: 999, background: d.done ? '#FFFFFF' : 'transparent', fontSize: 11, color: d.done ? '#2F4A3F' : '#A69ACD', whiteSpace: 'nowrap', fontWeight: d.done ? 600 : 400 }}>{d.done ? 'Done ✓' : 'Explore →'}</div>
+              <div style={{ padding: d.done ? '4px 8px' : 0, borderRadius: 999, background: d.done ? '#F2EDE6' : 'transparent', fontSize: 11, color: d.done ? '#2F4A3F' : '#A69ACD', whiteSpace: 'nowrap', fontWeight: d.done ? 600 : 400 }}>{d.done ? 'Done ✓' : 'Explore →'}</div>
             </div>
             <div style={{ marginTop: 7, fontFamily: "'Playfair Display', serif", fontSize: 19, lineHeight: 1.3, color: '#2F4A3F' }}>{d.title}</div>
             <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.5, color: '#2F4A3F' }}>{d.note}</div>
