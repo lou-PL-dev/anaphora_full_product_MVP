@@ -11,11 +11,11 @@ export default function Discovery({
     return (
       <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FFFFFF, #F2EDE6)' }}>
         <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
+          <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid #DDEAE6', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 34px', textAlign: 'center' }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#2F4A3F' }}>Discovery isn't available</div>
-          <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#5C6B62' }}>We couldn’t load this Discovery. Try again in a moment.</div>
+          <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>We couldn’t load this Discovery. Try again in a moment.</div>
         </div>
       </div>
     );
@@ -24,11 +24,11 @@ export default function Discovery({
   return (
     <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'linear-gradient(175deg, #FFFFFF, #F2EDE6)' }}>
       <div style={{ padding: '60px 22px 8px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
-        <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(47,74,63,.1)', overflow: 'hidden' }}>
+        <button onClick={discoveryBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid #DDEAE6', background: 'transparent', color: '#2F4A3F', cursor: 'pointer' }}>←</button>
+        <div style={{ flex: 1, height: 3, borderRadius: 2, background: '#DDEAE6', overflow: 'hidden' }}>
           <div style={{ height: '100%', borderRadius: 2, background: 'linear-gradient(90deg, #2F4A3F, #A69ACD)', width: discoveryProgress, transition: 'width .5s cubic-bezier(.2,.8,.2,1)' }} />
         </div>
-        <div style={{ fontSize: 11, color: '#94A09A', letterSpacing: '.06em' }}>{discoveryCounter}</div>
+        <div style={{ fontSize: 11, color: '#A69ACD', letterSpacing: '.06em' }}>{discoveryCounter}</div>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '24px 26px 10px' }}>
@@ -61,12 +61,12 @@ export default function Discovery({
 
         {dqIsSpectrum && (
           <div style={{ marginTop: 46 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#5C6B62', letterSpacing: '.02em' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2F4A3F', letterSpacing: '.02em' }}>
               <span>{dqLeft}</span><span>{dqRight}</span>
             </div>
             <input className="ap-sl" type="range" min="0" max="100" step="1" value={dqValue} onChange={onSpectrum} style={{ marginTop: 14, width: '100%' }} />
             <div style={{ marginTop: 26, textAlign: 'center', fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontSize: 19, color: '#2F4A3F', minHeight: 30 }}>{dqReading}</div>
-            <div style={{ marginTop: 6, textAlign: 'center', fontSize: 12, color: '#94A09A' }}>Drag — there's no right answer.</div>
+            <div style={{ marginTop: 6, textAlign: 'center', fontSize: 12, color: '#A69ACD' }}>Drag — there's no right answer.</div>
           </div>
         )}
 
@@ -77,7 +77,7 @@ export default function Discovery({
             onChange={onTextAnswer}
             rows={6}
             placeholder={dqPlaceholder || 'Write whatever comes to mind…'}
-            style={{ marginTop: 24, width: '100%', boxSizing: 'border-box', resize: 'vertical', padding: '17px 18px', borderRadius: 18, border: '1.5px solid rgba(47,74,63,.12)', background: '#FFFFFF', color: '#2F4A3F', fontFamily: "'Inter', sans-serif", fontSize: 14, lineHeight: 1.6, outline: 'none' }}
+            style={{ marginTop: 24, width: '100%', boxSizing: 'border-box', resize: 'vertical', padding: '17px 18px', borderRadius: 18, border: '1.5px solid #DDEAE6', background: '#FFFFFF', color: '#2F4A3F', fontFamily: "'Inter', sans-serif", fontSize: 14, lineHeight: 1.6, outline: 'none' }}
           />
         )}
       </div>
