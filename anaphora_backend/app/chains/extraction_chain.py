@@ -1,62 +1,65 @@
 """
-Operation B — Structured extraction (PRD section 31).
-Turns a completed conversation transcript into a Relationship Blueprint,
-keeping ME and IDEAL_PARTNER strictly separate (section 12).
+Operation B — Structured Blueprint reconciliation.
+
+The canonical machine-readable source is the accumulated atomic observations
+captured during conversation. The polished narrative is generated from that
+state; it is not itself the source of truth for matching.
 """
 from langchain_openai import ChatOpenAI
 
 from ..config import settings
-from ..schemas import ExtractionResult
+from ..schemas import ConversationObservation, ExtractionResult
 
-EXTRACTION_SYSTEM_PROMPT = """You extract structured relationship-matchmaking data from a \
-conversation transcript between Anaphora (an AI matchmaker) and a user, AND write a short \
-human portrait of the ideal partner from the same transcript.
+RECONCILIATION_SYSTEM_PROMPT = """You reconcile Anaphora's accumulated atomic conversation observations into one Relationship Blueprint.
 
-Critical rule: NEVER confuse what the user IS with what the user WANTS. If the user says \
-"I'm quite independent and need a lot of time for myself," that is a signal about the user \
-themselves (perspective: ME), not a description of their ideal partner.
+Critical rules:
+- Treat the observations as the canonical machine-readable evidence.
+- Keep ME and IDEAL_PARTNER strictly separate.
+- Preserve meaningful tensions or apparently contradictory needs as separate signals when both are supported; do not smooth them into a vague compromise.
+- Deduplicate observations that clearly mean the same thing, preferring the more explicit and better-supported wording.
+- Never upgrade an inferred observation into a hard_requirement.
+- hard_requirement is allowed only for explicit evidence that clearly says essential/non-negotiable/dealbreaker.
+- Keep confidence conservative. Do not invent missing facts.
+- evidence_text must remain a short phrase grounded in the supplied evidence.
 
-Some long user turns may appear as an internal digest rather than the full raw message. Treat those digests as grounded working memory from that single user turn; use their retained verbatim evidence snippets for evidence_text and never invent details beyond the digest.
+Return the same seven categories for both perspectives: personality, lifestyle, physical_type, relationship_dynamic, love_language, dealbreakers, values.
 
-STRUCTURED SIGNALS (ideal_partner and me — same 7 categories apply to both):
-- Assign each signal to the correct category: personality, lifestyle, physical_type, \
-relationship_dynamic, love_language, dealbreakers, or values.
-- Assign a strength: "hard_requirement" only if the user explicitly describes it as \
-essential/non-negotiable; "strong_preference" if they emphasize it; "preference" for \
-anything mentioned without strong emphasis; "unknown" if genuinely ambiguous.
-- Include a short evidence_text quote (a few words) from the transcript that justifies it.
-- Only extract what is actually supported by the transcript. Do not invent signals.
-
-NARRATIVE:
-- Write ONE flowing portrait of the ideal partner — several short paragraphs, not a list — \
-the way a perceptive close friend would describe someone they think you'd love to meet, \
-weaving personality, how they move through daily life, what draws you to them physically, \
-how they connect with a partner, and where they plausibly are in life (work, stage of life) \
-into a real, specific person, not a trait inventory. It's fine to address the user directly \
-in places ("you'd bring your own two worlds together") the way a warm, opinionated friend \
-would.
-- Base it ONLY on what the transcript actually supports, extrapolated the way a friend who \
-was really listening would — concrete and specific rather than generic, but not inventing \
-facts the user never implied.
-- Write it in the SAME LANGUAGE the user wrote in during the conversation."""
+After reconciling the structured signals, write ONE flowing human-readable portrait of the IDEAL_PARTNER. The narrative is only a presentation layer over the structured evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
 
 
-def _format_transcript(history: list[dict]) -> str:
-    lines = []
-    for m in history:
-        speaker = "User" if m["role"] == "user" else "Anaphora"
-        content = m.get("processing_summary") or m["content"]
-        lines.append(f"{speaker}: {content}")
-    return "\n".join(lines)
+def observations_from_history(history: list[dict]) -> list[ConversationObservation]:
+    """Collect canonical observations stored on user turns, preserving order."""
+    observations: list[ConversationObservation] = []
+    for message in history:
+        if message.get("role") != "user":
+            continue
+        for raw in message.get("observations") or []:
+            observations.append(ConversationObservation.model_validate(raw))
+    return observations
+
+
+def reconcile_blueprint(observations: list[ConversationObservation]) -> ExtractionResult:
+    """Build the canonical Blueprint and narrative from accumulated evidence."""
+    llm = ChatOpenAI(model=settings.openai_model, temperature=0, api_key=settings.openai_api_key)
+    structured_llm = llm.with_structured_output(ExtractionResult)
+    payload = "\n".join(
+        f"{i + 1}. perspective={obs.perspective}; category={obs.category.value}; "
+        f"label={obs.label}; strength={obs.strength.value}; confidence={obs.confidence:.2f}; "
+        f"explicit={obs.explicit}; evidence={obs.evidence_text or '(none)'}"
+        for i, obs in enumerate(observations)
+    )
+    return structured_llm.invoke([
+        {"role": "system", "content": RECONCILIATION_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Accumulated observations:\n\n{payload or '(none)'}"},
+    ])
 
 
 def extract_blueprint(history: list[dict]) -> ExtractionResult:
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0, api_key=settings.openai_api_key)
-    structured_llm = llm.with_structured_output(ExtractionResult)
+    """Compatibility entry point: reconcile from stored observations.
 
-    transcript = _format_transcript(history)
-    result = structured_llm.invoke([
-        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Transcript:\n\n{transcript}"},
-    ])
-    return result
+    Iteration 2 intentionally stops re-reading the entire raw transcript at
+    completion. Raw messages remain stored for traceability, but structured
+    observations drive the canonical Blueprint.
+    """
+    observations = observations_from_history(history)
+    return reconcile_blueprint(observations)
