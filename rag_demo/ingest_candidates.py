@@ -1,19 +1,18 @@
 """
 rag_demo — seeds the real `candidates` table (Postgres/pgvector only) for
-the RAG matching feature.
+the reciprocal RAG matching feature.
 
-Generates N self-profile personas (generate_personas.generate_candidate_pool
-— narrative + extracted `me` signals, run through anaphora_backend's real
-extraction chain), assigns synthetic display metadata (name/age/gender —
-presentation-layer data with no bearing on the psychometric trait sampling),
-computes a real OpenAI embedding per candidate, and writes everything into
-the live `candidates` table via the backend's own SQLAlchemy session — the
-exact models the /matches endpoint reads from, not a side JSON file.
+Each synthetic candidate now carries BOTH Blueprint perspectives:
+- ME: who the candidate is
+- IDEAL_PARTNER: who the candidate wants
+
+Broad retrieval embeddings are still built from ME only, so candidate desires
+do not contaminate the first-pass search. The IDEAL_PARTNER side is consumed
+later by reciprocal reranking.
 
 Requires:
-  - OPENAI_API_KEY (candidate narratives + extraction + embeddings)
-  - DATABASE_URL pointing at the real Postgres instance with
-    `CREATE EXTENSION vector;` already run (see anaphora_backend/README.md)
+  - OPENAI_API_KEY
+  - DATABASE_URL pointing at Postgres with pgvector enabled
 """
 from __future__ import annotations
 
@@ -22,17 +21,15 @@ import random
 import sys
 from pathlib import Path
 
-from generate_personas import generate_candidate_persona
-from profiles import persona_text
+from generate_reciprocal_candidates import (
+    candidate_me_embedding_text,
+    generate_reciprocal_candidate_persona,
+)
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent / "anaphora_backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-# Synthetic display names only — not sourced from any real dataset or real
-# person, same principle as STYLE_SEED_EXAMPLES in generate_personas.py.
-# Deliberately plain/common first names across a few cultural backgrounds
-# for a bit of variety without trying to be exhaustive.
 FIRST_NAMES = {
     "female": [
         "Mia", "Sofia", "Amara", "Lena", "Priya", "Chloe", "Nadia", "Elena",
@@ -47,26 +44,16 @@ FIRST_NAMES = {
     ],
 }
 
-# Which of the 5 gender/photo buckets get a real photo (see
-# frontend/public/candidates/README.md for the file naming convention) —
-# only the first N candidates generated in each bucket get one, the rest
-# fall back to an initials avatar in the UI. Order matters: these are
-# assigned in generation order within each bucket.
 PHOTO_FILES = {
     "male": ["/candidates/m1.jpg", "/candidates/m2.jpg", "/candidates/m3.jpg", "/candidates/m4.jpg"],
     "female": ["/candidates/f1.jpg", "/candidates/f2.jpg", "/candidates/f3.jpg", "/candidates/f4.jpg"],
     "nonbinary": ["/candidates/a1.jpg", "/candidates/a2.jpg"],
 }
 
-# Roughly even male/female split with a smaller nonbinary share — arbitrary
-# for a synthetic demo pool, not a claim about real population proportions.
 GENDER_WEIGHTS = [("male", 0.45), ("female", 0.45), ("nonbinary", 0.10)]
 
 
 def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
-    """Deterministic-given-seed assignment of gender/name/age/photo to n
-    candidate slots, independent of trait sampling (these are display
-    fields only, not psychometric data)."""
     genders = rng.choices(
         [g for g, _ in GENDER_WEIGHTS], weights=[w for _, w in GENDER_WEIGHTS], k=n
     )
@@ -92,10 +79,10 @@ def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
 
 
 def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
+    from app.config import settings
     from app.database import SessionLocal, engine
     from app.models import Candidate
     from langchain_openai import OpenAIEmbeddings
-    from app.config import settings
 
     if engine.dialect.name != "postgresql":
         raise RuntimeError(
@@ -116,11 +103,15 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
 
         for i in range(n):
             try:
-                persona = generate_candidate_persona(rng, f"candidate-{i}", use_llm=True)
+                persona = generate_reciprocal_candidate_persona(
+                    rng, f"candidate-{i}", use_llm=True
+                )
                 demo = demographics[i]
                 signal_dicts = [s.as_dict() for s in persona.signals]
-                embedding_text = persona_text(persona)
-                embedding = embedder.embed_query(embedding_text)
+                embedding = embedder.embed_query(candidate_me_embedding_text(persona))
+
+                me_count = sum(1 for s in persona.signals if s.perspective == "ME")
+                ideal_count = sum(1 for s in persona.signals if s.perspective == "IDEAL_PARTNER")
 
                 db.add(Candidate(
                     name=demo["name"],
@@ -131,13 +122,12 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                     signals=signal_dicts,
                     embedding=embedding,
                 ))
-                # Committed per-candidate, not once at the end: each candidate
-                # costs real narrative + extraction + embedding API calls, so a
-                # late failure (DB hiccup, one bad API response) must not throw
-                # away every candidate generated before it in the same run.
                 db.commit()
                 succeeded += 1
-                print(f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) — {len(signal_dicts)} signals")
+                print(
+                    f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) "
+                    f"— ME {me_count} / IDEAL_PARTNER {ideal_count} signals"
+                )
             except Exception as e:
                 db.rollback()
                 print(f"  [{i + 1}/{n}] FAILED — {e!r} — continuing with the rest")
@@ -155,7 +145,7 @@ def _main() -> None:
     args = parser.parse_args()
 
     count = ingest(args.n, seed=args.seed, clear=args.clear)
-    print(f"\nIngested {count} candidates into the candidates table.")
+    print(f"\nIngested {count} reciprocal candidates into the candidates table.")
 
 
 if __name__ == "__main__":
