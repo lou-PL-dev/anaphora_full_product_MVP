@@ -19,9 +19,18 @@ def _spec_or_404(discovery_id: str):
 
 
 @router.get("")
-def list_discoveries():
+def list_discoveries(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    completed_ids = {
+        row.discovery_id
+        for row in db.query(DiscoveryResponse.discovery_id)
+        .filter(DiscoveryResponse.user_id == user.id)
+        .distinct()
+    }
     return [
-        {"id": spec.id, "title": spec.title, "status": spec.status, "question_count": len(spec.questions)}
+        {
+            "id": spec.id, "title": spec.title, "status": spec.status,
+            "question_count": len(spec.questions), "completed": spec.id in completed_ids,
+        }
         for spec in DISCOVERIES.values()
         if spec.status == "active"
     ]

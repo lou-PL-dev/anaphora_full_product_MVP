@@ -31,6 +31,7 @@ DISCOVERY_DEFINITIONS = {
     "feel_at_home": {
         "title": "What makes you feel at home?",
         "category": "love_language",
+        "perspective": "IDEAL_PARTNER",
         "focus": "emotional needs, intimacy, autonomy, reassurance and communication",
         "questions": [
             _choice("bad_day", "You've had a horrible day. What would you most want your partner to do?", [
@@ -58,6 +59,7 @@ DISCOVERY_DEFINITIONS = {
     "chemistry": {
         "title": "What creates chemistry?",
         "category": "physical_type",
+        "perspective": "IDEAL_PARTNER",
         "focus": "attraction, personality energy, physical preferences and interpersonal chemistry",
         "questions": [
             _choice("party_attention", "At a party, who catches your attention first?", [
@@ -87,6 +89,7 @@ DISCOVERY_DEFINITIONS = {
     "how_you_love": {
         "title": "How do you love?",
         "category": "relationship_dynamic",
+        "perspective": "ME",
         "focus": "communication, closeness, conflict and emotional dynamics",
         "questions": [
             _choice("distance", "Your partner has seemed distant for two days. What's your instinct?", [
@@ -119,6 +122,7 @@ DISCOVERY_DEFINITIONS = {
     "live_together": {
         "title": "Could we actually live together?",
         "category": "lifestyle",
+        "perspective": "ME",
         "focus": "everyday compatibility, routines, money, cleanliness, social life, travel, sleep, family and leisure",
         "questions": [
             _choice("messy_sunday", "It's Sunday morning and the flat is a mess. What happens?", [
@@ -152,6 +156,7 @@ DISCOVERY_DEFINITIONS = {
     "non_negotiables": {
         "title": "What can't you compromise on?",
         "category": "dealbreakers",
+        "perspective": "IDEAL_PARTNER",
         "focus": "non-negotiables, strong preferences and ideal-world preferences",
         "questions": [
             _choice("must_have", "If only one quality absolutely had to be there, which would you protect first?", [
@@ -178,6 +183,7 @@ DISCOVERY_DEFINITIONS = {
     "relationship_archaeology": {
         "title": "Relationship Archaeology",
         "category": "relationship_dynamic",
+        "perspective": "ME",
         "focus": "patterns across previous relationships, framed as hypotheses rather than diagnoses",
         "questions": [
             _text("attracted", "Think about someone you were strongly drawn to. What pulled you in at the beginning?", "What has attracted you"),

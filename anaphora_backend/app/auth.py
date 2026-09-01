@@ -6,6 +6,7 @@ every conversation/blueprint is still tied to a stable identity across the
 demo session, without a login flow.
 """
 from fastapi import Header, Depends
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .database import get_db
@@ -20,6 +21,15 @@ def get_current_user(
     if not user:
         user = User(id=x_anaphora_user_id)
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            # The frontend fires several requests in parallel on first load
+            # (blueprint/readiness/preferences/discovery), so two of them can
+            # both see "no user yet" and race to insert the same id. The
+            # loser just re-reads the row the winner already committed.
+            db.rollback()
+            user = db.get(User, x_anaphora_user_id)
+        else:
+            db.refresh(user)
     return user

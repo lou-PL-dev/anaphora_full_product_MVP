@@ -70,14 +70,22 @@ def complete_conversation(
 
     result = extract_blueprint(convo.messages)
 
-    db.query(BlueprintSignal).filter(
-        BlueprintSignal.user_id == user.id,
-        BlueprintSignal.source == "conversation",
-    ).delete()
-
+    # Multiple conversations (the "Add more" flow) each cover their own
+    # ground — a follow-up conversation about values shouldn't erase what
+    # an earlier one established about lifestyle. Replace only the
+    # (perspective, category) pairs this extraction actually has fresh
+    # data for, and leave every other conversation-sourced signal alone.
     created: list[BlueprintSignal] = []
 
     def _store(perspective: str, category: str, items) -> None:
+        if not items:
+            return
+        db.query(BlueprintSignal).filter(
+            BlueprintSignal.user_id == user.id,
+            BlueprintSignal.source == "conversation",
+            BlueprintSignal.perspective == perspective,
+            BlueprintSignal.category == category,
+        ).delete()
         for item in items:
             signal = BlueprintSignal(
                 user_id=user.id,
@@ -95,7 +103,12 @@ def complete_conversation(
         _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
         _store("ME", category, getattr(result.me, category))
 
-    user.blueprint_narrative = result.narrative
+    # Same reasoning for the narrative: a follow-up conversation's summary
+    # should add to the Blueprint narrative, not replace it outright.
+    user.blueprint_narrative = (
+        f"{user.blueprint_narrative}\n\n{result.narrative}"
+        if user.blueprint_narrative else result.narrative
+    )
     db.add(user)
 
     convo.status = "completed"

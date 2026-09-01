@@ -55,6 +55,23 @@ export default function App() {
     api('GET', '/discovery/' + DEFAULT_DISCOVERY_ID).then((r) => {
       if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || 'What kind of life are you building?' });
     });
+    // Rehydrate everything the backend already knows for this device's uid,
+    // so a page reload doesn't visually reset progress that still exists.
+    api('GET', '/blueprint').then((r) => {
+      if (r) patch({ signals: r.signals || [], narrative: r.narrative || '' });
+    });
+    api('GET', '/readiness').then((r) => {
+      if (r) patch({ readiness: r.readiness_pct });
+    });
+    api('GET', '/preferences').then((r) => {
+      if (r && r.gender_preference) patch({ gender: r.gender_preference, ageMin: r.age_min ?? 18, ageMax: r.age_max ?? 99, preferencesSaved: true });
+    });
+    api('GET', '/discovery').then((r) => {
+      if (Array.isArray(r)) {
+        const completed = r.filter((d) => d.completed).map((d) => d.id);
+        patch({ completedDiscoveries: completed, discoveryDone: completed.includes(DEFAULT_DISCOVERY_ID) });
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -66,12 +83,14 @@ export default function App() {
   const goLegal = (legalSection) => () => patch({ screen: 'legal', legalSection, error: null });
 
   const beginConversation = async () => {
-    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, error: null });
+    patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, convoCompleted: false, error: null });
     const r = await api('POST', '/conversation/start');
     if (r) patch({ convoId: r.conversation_id, messages: [{ role: 'assistant', content: r.message }] });
     else patch({ error: { screen: 'chat', message: "Couldn't reach the backend to start the conversation. Check it's running, then retry." } });
   };
-  const resumeConversation = () => { if (s.messages.length) patch({ screen: 'chat' }); else beginConversation(); };
+  // A completed conversation can't take more messages (the backend rejects them) —
+  // "Continue"/"Add more" should open a new one instead of reusing the dead id.
+  const resumeConversation = () => { if (s.messages.length && !s.convoCompleted) patch({ screen: 'chat' }); else beginConversation(); };
   const onDraft = (e) => patch({ draft: e.target.value });
   const setDraft = (text) => patch({ draft: text });
   const onDraftKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };

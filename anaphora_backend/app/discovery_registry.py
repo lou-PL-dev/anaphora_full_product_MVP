@@ -53,7 +53,7 @@ for discovery_id, definition in DISCOVERY_DEFINITIONS.items():
         questions=definition["questions"],
         synthesize_insight=make_synthesizer(definition["title"], definition["focus"]),
         responses_to_signals=make_signal_mapper(definition["questions"]),
-        perspective="ME",
+        perspective=definition.get("perspective", "ME"),
         category=definition["category"],
     )
 
