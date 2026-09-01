@@ -3,6 +3,7 @@ import PhoneFrame from './components/PhoneFrame';
 import TabBar from './components/TabBar';
 import SignalEditSheet from './components/SignalEditSheet';
 import PlansModal from './components/PlansModal';
+import InviteLinkSheet from './components/InviteLinkSheet';
 import Welcome from './screens/Welcome';
 import Legal from './screens/Legal';
 import Chat from './screens/Chat';
@@ -32,7 +33,7 @@ const initialState = {
   questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [],
   discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
-  plansOpen: false,
+  plansOpen: false, inviteOpen: false, copied: false,
   gender: null, ageMin: 18, ageMax: 99,
   preferencesSaved: false, preferencesSaving: false, preferencesError: null,
   matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null, hasVisitedReadyMatches: false,
@@ -43,6 +44,7 @@ export default function App() {
   const [s, setS] = useState(initialState);
   const uidRef = useRef(null);
   const chatEndRef = useRef(null);
+  const copyTimerRef = useRef(null);
   const patch = (update) => setS((prev) => ({ ...prev, ...(typeof update === 'function' ? update(prev) : update) }));
   const api = async (method, path, body, timeoutMs) => {
     const r = await apiCall(uidRef.current, method, path, body, timeoutMs);
@@ -225,6 +227,22 @@ export default function App() {
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
   const openPlans = () => patch({ plansOpen: true });
   const closePlans = () => patch({ plansOpen: false });
+  const openInvite = () => patch({ inviteOpen: true, copied: false });
+  const closeInvite = () => patch({ inviteOpen: false });
+  const inviteLink = 'anaphora.app/f/' + String(uidRef.current || 'demo').replace(/-/g, '').slice(0, 8);
+  const copyInvite = async () => {
+    try { await navigator.clipboard.writeText(inviteLink); }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = inviteLink; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e2) { /* clipboard unavailable */ }
+      document.body.removeChild(ta);
+    }
+    patch({ copied: true });
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => patch({ copied: false }), 2200);
+  };
 
   const accent = LAV;
   const groups = GROUP_DEFS.map(([persp, cat, title, side]) => {
@@ -245,7 +263,7 @@ export default function App() {
     { key: 'me', title: 'Tell me who you are', note: aboutMeReady ? 'Enough about you' : 'Help Anaphora understand you too', done: aboutMeReady, cta: aboutMeReady ? 'Add more' : (s.messages.length ? 'Continue' : 'Start'), onGo: resumeConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving && s.discoveryId === DEFAULT_DISCOVERY_ID ? 'Adding insight to your Blueprint…' : (lifeDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: lifeDone, cta: s.discoverySaving && s.discoveryId === DEFAULT_DISCOVERY_ID ? 'Adding…' : (lifeDone ? 'Done' : '2 min'), onGo: lifeDone ? go('insight') : (() => startDiscovery(DEFAULT_DISCOVERY_ID, 'home')) },
     { key: 'prefs', title: 'Basic matching preferences', note: s.preferencesSaved ? s.gender + ' · ' + s.ageMin + '–' + s.ageMax : 'Who and what age range', done: s.preferencesSaved, cta: s.preferencesSaved ? 'Edit' : 'Set', onGo: go('profile') },
-  ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
+  ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : '#DDEAE6', fill: st.done ? SAGE : 'transparent' }));
   const refinementActions = [
     { key: 'talk', title: 'Talk to Anaphora', note: 'Add nuance about you or the person you’re looking for', cta: 'Continue', onGo: resumeConversation },
     { key: 'discover', title: 'Explore another Discovery', note: 'Reflect on chemistry, affection, values and everyday life', cta: 'Discover', onGo: go('convos') },
@@ -278,9 +296,9 @@ export default function App() {
   const readinessCopy = readiness >= 90 ? ['Ready when you are', 'We know enough to look for people who actually fit.'] : readiness >= 60 ? ['Coming into focus', 'A little more and intros start making real sense.'] : readiness > 0 ? ['A good beginning', 'Every answer sharpens who we look for.'] : ['Nothing yet', 'One conversation is all it takes to start.'];
   const dqOptions = (q.options || []).map((o) => {
     const selected = o.id === 'other' ? otherSelected : ans === o.label;
-    return { key: o.id, label: o.label, onPick: pickOption(q.id, o), border: selected ? accent : 'rgba(47,74,63,.1)', bg: selected ? 'rgba(166,154,205,.1)' : '#FFFFFF' };
+    return { key: o.id, label: o.label, onPick: pickOption(q.id, o), border: selected ? accent : '#DDEAE6', bg: selected ? 'rgba(166,154,205,.1)' : '#FFFFFF' };
   });
-  const strengthOptions = STRENGTHS.map(([v, label, note]) => ({ key: v, label, note, onPick: pickStrength(v), border: s.editStrength === v ? accent : 'rgba(47,74,63,.12)', bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF' }));
+  const strengthOptions = STRENGTHS.map(([v, label, note]) => ({ key: v, label, note, onPick: pickStrength(v), border: s.editStrength === v ? accent : '#DDEAE6', bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF' }));
   const modeLabel = s.mode === 'live' ? 'Live backend' : (s.mode === 'offline' ? 'Backend offline' : 'Connecting…');
   const modeDot = s.mode === 'live' ? '#4C8C6A' : (s.mode === 'offline' ? '#B04A3A' : '#C9C2B8');
 
@@ -296,7 +314,7 @@ export default function App() {
     case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Choose the most fitting'} dqNextBg={answered ? SAGE : '#F2EDE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
-    case 'friends': screenEl = <Friends />; break;
+    case 'friends': screenEl = <Friends openInvite={openInvite} />; break;
     case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
     default: screenEl = null;
   }
@@ -307,6 +325,7 @@ export default function App() {
       {TAB_SCREENS.includes(s.screen) && <TabBar activeScreen={s.screen} onGo={(key) => (key === 'matches' ? goMatches() : go(key)())} />}
       {s.editing && <SignalEditSheet editLabel={s.editLabel} onEditLabel={onEditLabel} closeEdit={closeEdit} saveEdit={saveEdit} strengthOptions={strengthOptions} />}
       {s.plansOpen && <PlansModal closePlans={closePlans} />}
+      {s.inviteOpen && <InviteLinkSheet closeInvite={closeInvite} copyInvite={copyInvite} inviteLink={inviteLink} copied={s.copied} />}
     </PhoneFrame>
   );
 }

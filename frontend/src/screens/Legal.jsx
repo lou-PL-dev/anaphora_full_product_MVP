@@ -9,8 +9,8 @@ const PLACEHOLDER_CONTACT_EMAIL = 'privacy@anaphora.app';
 
 const h2 = { marginTop: 28, fontFamily: "'Playfair Display', serif", fontSize: 19, color: '#2F4A3F' };
 const h3 = { marginTop: 18, fontSize: 13.5, fontWeight: 600, color: '#2F4A3F' };
-const p = { marginTop: 8, fontSize: 13, lineHeight: 1.65, color: '#4A5C53' };
-const li = { marginTop: 6, fontSize: 13, lineHeight: 1.6, color: '#4A5C53' };
+const p = { marginTop: 8, fontSize: 13, lineHeight: 1.65, color: '#2F4A3F' };
+const li = { marginTop: 6, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' };
 
 export default function Legal({ goBack, section }) {
   const privacyRef = useRef(null);
@@ -22,14 +22,14 @@ export default function Legal({ goBack, section }) {
   }, [section]);
 
   return (
-    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#FBF9F6' }}>
+    <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#F2EDE6' }}>
       <div style={{ padding: '64px 22px 6px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={goBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(47,74,63,.12)', background: 'transparent', color: '#2F4A3F', fontSize: 15, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>←</button>
+        <button onClick={goBack} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid #DDEAE6', background: 'transparent', color: '#2F4A3F', fontSize: 15, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>←</button>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, color: '#2F4A3F' }}>Important Legalities</div>
       </div>
 
       <div style={{ padding: '18px 22px 60px', maxWidth: 520 }}>
-        <div style={{ fontSize: 12.5, lineHeight: 1.6, color: '#94A09A' }}>
+        <div style={{ fontSize: 12.5, lineHeight: 1.6, color: '#A69ACD' }}>
           Last updated 2026-08-31. Anaphora is a student capstone MVP — this describes what the product
           actually does today, not a finished commercial service. It's written to be honest and specific
           about our real setup, not to be exhaustive; get a lawyer's eyes on it before a real launch.

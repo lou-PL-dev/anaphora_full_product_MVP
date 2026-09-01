@@ -52,10 +52,10 @@ export const STRENGTHS = [
 ];
 
 export const STRENGTH_STYLE = {
-  hard_requirement: { dot: '#2F4A3F', bg: 'rgba(47,74,63,.1)', fg: '#2F4A3F', label: 'NON-NEGOTIABLE' },
+  hard_requirement: { dot: '#2F4A3F', bg: '#DDEAE6', fg: '#2F4A3F', label: 'NON-NEGOTIABLE' },
   strong_preference: { dot: '#A69ACD', bg: 'rgba(166,154,205,.16)', fg: '#7A6DAF', label: 'STRONG' },
-  preference: { dot: '#DDEAE6', bg: 'rgba(47,74,63,.05)', fg: '#5C6B62', label: 'PREFERENCE' },
-  unknown: { dot: '#E2DED8', bg: 'rgba(47,74,63,.04)', fg: '#94A09A', label: 'OPEN' },
+  preference: { dot: '#DDEAE6', bg: 'rgba(47,74,63,.05)', fg: '#2F4A3F', label: 'PREFERENCE' },
+  unknown: { dot: '#E2DED8', bg: 'rgba(47,74,63,.04)', fg: '#A69ACD', label: 'OPEN' },
 };
 
 export const TABS = [
@@ -68,6 +68,4 @@ export const TABS = [
 
 export const STATIC_FRIENDS = [
   { initial: 'L', name: 'Léa', rel: 'Sister', quote: "She's thoughtful, adventurous, and will make you laugh every day." },
-  { initial: 'T', name: 'Thomas', rel: 'Friend, 12 years', quote: 'Needs someone who can keep up with her, and who reads.' },
-  { initial: 'M', name: 'Marek', rel: 'Colleague', quote: 'Warmest person in any room, but she needs her quiet.' },
 ];

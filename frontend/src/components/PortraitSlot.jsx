@@ -4,7 +4,7 @@
 // swap `src` in for a real photo URL once match photos exist.
 export default function PortraitSlot({ src, label, style }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5C6B62', ...style }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2F4A3F', ...style }}>
       {src ? (
         <img src={src} alt={label || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
