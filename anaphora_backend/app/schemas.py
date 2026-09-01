@@ -50,6 +50,26 @@ class CoverageField(str, Enum):
     me_values = "me_values"
 
 
+class LongInputChunkDigest(BaseModel):
+    """Compact, evidence-preserving understanding of one internal chunk.
+
+    This is processing memory only: the original user message remains stored
+    verbatim and still counts as one conversation turn.
+    """
+    key_points: list[str] = Field(
+        default_factory=list,
+        description="Specific factual points from this chunk, preserving nuance and contradictions",
+    )
+    coverage_fields: list[CoverageField] = Field(
+        default_factory=list,
+        description="Perspective-specific Blueprint fields genuinely supported by this chunk",
+    )
+    evidence_snippets: list[str] = Field(
+        default_factory=list,
+        description="A few short verbatim snippets worth retaining for grounding and conversational tone",
+    )
+
+
 # --- LLM structured-extraction output (Operation B) -------------------------
 
 class SignalItem(BaseModel):
