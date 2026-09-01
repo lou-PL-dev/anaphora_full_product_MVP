@@ -8,22 +8,32 @@ from ..schemas import (
     ConversationStartResponse, ConversationMessageRequest, ConversationMessageResponse,
     ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut, PerspectiveBlueprint,
 )
-from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete
+from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete, side_ready
 from ..chains.extraction_chain import extract_blueprint
-from ..readiness import compute_readiness
+from ..readiness import compute_readiness, category_coverage
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
 
 OPENING_PROMPT = "Tell me about the person you'd love to meet."
+OPENING_PROMPT_ME_FOCUSED = (
+    "You've already told Anaphora a lot about who you're looking for — "
+    "let's talk about you this time. What does your own day-to-day look like?"
+)
 
 
 @router.post("/start", response_model=ConversationStartResponse)
 def start_conversation(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    convo = Conversation(user_id=user.id, messages=[{"role": "assistant", "content": OPENING_PROMPT}])
+    signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
+    known_me, known_ideal = category_coverage(signals)
+    # A follow-up "Add more" conversation shouldn't default to asking about
+    # the ideal partner again if that side is already the well-covered one.
+    opening = OPENING_PROMPT_ME_FOCUSED if side_ready(known_ideal) and not side_ready(known_me) else OPENING_PROMPT
+
+    convo = Conversation(user_id=user.id, messages=[{"role": "assistant", "content": opening}])
     db.add(convo)
     db.commit()
     db.refresh(convo)
-    return ConversationStartResponse(conversation_id=convo.id, message=OPENING_PROMPT)
+    return ConversationStartResponse(conversation_id=convo.id, message=opening)
 
 
 @router.post("/message", response_model=ConversationMessageResponse)
@@ -38,10 +48,13 @@ def send_message(
     if convo.status == "completed":
         raise HTTPException(400, "Conversation already completed")
 
+    signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
+    known_me, known_ideal = category_coverage(signals)
+
     history = list(convo.messages)
     history.append({"role": "user", "content": body.message})
 
-    turn = converse(history)
+    turn = converse(history, known_me=known_me, known_ideal=known_ideal)
     history.append({"role": "assistant", "content": turn.reply})
 
     convo.messages = history
@@ -51,7 +64,7 @@ def send_message(
     return ConversationMessageResponse(
         reply=turn.reply,
         turn_count=user_turn_count(history),
-        ready_to_complete=is_ready_to_complete(history, turn.coverage_fields),
+        ready_to_complete=is_ready_to_complete(history, turn.coverage_fields, known_me=known_me, known_ideal=known_ideal),
         categories_covered=turn.coverage_fields,
     )
 

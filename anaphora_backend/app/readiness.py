@@ -53,6 +53,14 @@ def _coverage(signals: list[BlueprintSignal], perspective: str) -> set[str]:
     }
 
 
+def category_coverage(signals: list[BlueprintSignal]) -> tuple[set[str], set[str]]:
+    """(me_covered, ideal_partner_covered) from every signal source (conversation
+    + Discovery). Conversation steering uses this so a follow-up conversation
+    knows what's already established instead of judging depth from its own
+    empty transcript alone."""
+    return _coverage(signals, "ME"), _coverage(signals, "IDEAL_PARTNER")
+
+
 def _profile_ready(covered: set[str]) -> bool:
     return (
         MANDATORY_CATEGORIES.issubset(covered)

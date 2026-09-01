@@ -57,11 +57,35 @@ def _to_langchain_messages(history: list[dict]) -> list:
     return messages
 
 
-def converse(history: list[dict]) -> ConversationTurnResult:
+def _known_coverage_note(known_me: set[str], known_ideal: set[str]) -> str:
+    """A follow-up conversation ("Add more") starts with an empty transcript
+    even though earlier conversations/Discoveries may have already filled in
+    most of one side. Without this, the model judges depth from this short
+    conversation alone and can wrap up thinking both sides are covered when
+    only one actually is."""
+    if not known_me and not known_ideal:
+        return ""
+
+    def _fmt(categories: set[str]) -> str:
+        return ", ".join(sorted(categories)) if categories else "nothing yet"
+
+    return f"""
+
+This is a follow-up conversation — the user already has a Blueprint from earlier conversations and/or Discoveries. Already known (do NOT re-ask about these categories on that side; judge next_question_target and "enough depth" against this PLUS what you learn now, not this conversation alone):
+- ME already covers: {_fmt(known_me)}
+- IDEAL_PARTNER already covers: {_fmt(known_ideal)}
+If one side is already far more complete than the other, spend this entire conversation on the weaker side starting with your very first question — don't default to leading with IDEAL_PARTNER out of habit."""
+
+
+def converse(history: list[dict], known_me: set[str] = frozenset(), known_ideal: set[str] = frozenset()) -> ConversationTurnResult:
     """Recompute perspective-specific coverage from the full transcript every turn."""
     llm = ChatOpenAI(model=settings.openai_conversation_model, temperature=0.7, api_key=settings.openai_api_key)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
-    return structured_llm.invoke(_to_langchain_messages(history))
+    messages = _to_langchain_messages(history)
+    note = _known_coverage_note(known_me, known_ideal)
+    if note:
+        messages[0] = SystemMessage(content=SYSTEM_PROMPT + note)
+    return structured_llm.invoke(messages)
 
 
 def user_turn_count(history: list[dict]) -> int:
@@ -77,19 +101,27 @@ def _side_categories(coverage_fields: list[CoverageField], prefix: str) -> set[s
     }
 
 
-def _side_ready(categories: set[str]) -> bool:
+def side_ready(categories: set[str]) -> bool:
     return MANDATORY_PER_SIDE.issubset(categories) and len(categories) >= MIN_CATEGORIES_PER_SIDE
 
 
-def is_ready_to_complete(history: list[dict], coverage_fields: list[CoverageField]) -> bool:
-    """Completion mirrors readiness's two-sided profile gate instead of a flat checklist."""
+def is_ready_to_complete(
+    history: list[dict],
+    coverage_fields: list[CoverageField],
+    known_me: set[str] = frozenset(),
+    known_ideal: set[str] = frozenset(),
+) -> bool:
+    """Completion mirrors readiness's two-sided profile gate instead of a flat
+    checklist. known_me/known_ideal fold in coverage already banked from
+    earlier conversations/Discoveries, so a short follow-up conversation isn't
+    judged against its own empty starting point alone."""
     turns = user_turn_count(history)
     if turns < MINIMUM_USER_TURNS:
         return False
 
-    ideal = _side_categories(coverage_fields, "ideal_partner")
-    me = _side_categories(coverage_fields, "me")
-    if _side_ready(ideal) and _side_ready(me):
+    ideal = _side_categories(coverage_fields, "ideal_partner") | known_ideal
+    me = _side_categories(coverage_fields, "me") | known_me
+    if side_ready(ideal) and side_ready(me):
         return True
 
     # Safety ceiling: never trap a user indefinitely if they repeatedly decline
