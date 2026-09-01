@@ -61,7 +61,14 @@ export default function App() {
       if (r) patch({ signals: r.signals || [], narrative: r.narrative || '' });
     });
     api('GET', '/readiness').then((r) => {
-      if (r) patch({ readiness: r.readiness_pct });
+      if (!r) return;
+      // A returning user with existing progress should land on Home, not
+      // the "Begin" screen — but only if they haven't already navigated
+      // away while this was in flight.
+      patch((prev) => ({
+        readiness: r.readiness_pct,
+        screen: r.readiness_pct > 0 && prev.screen === 'welcome' ? 'home' : prev.screen,
+      }));
     });
     api('GET', '/preferences').then((r) => {
       if (r && r.gender_preference) patch({ gender: r.gender_preference, ageMin: r.age_min ?? 18, ageMax: r.age_max ?? 99, preferencesSaved: true });
