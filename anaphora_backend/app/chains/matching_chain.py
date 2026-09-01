@@ -1,16 +1,17 @@
 """
-Operation C — evidence-first matching.
+Operation C — reciprocal evidence-first matching.
 
-Iteration 3 keeps matching one-directional (the user's IDEAL_PARTNER against a
-candidate's ME profile) but separates cheap broad retrieval from structured
-semantic reranking and deep LLM judgment.
+Iteration 4 evaluates both directions:
+  MY IDEAL_PARTNER -> CANDIDATE ME
+  MY ME -> CANDIDATE IDEAL_PARTNER
 
 Pipeline:
-  eligibility (gender/age) -> broad vector retrieval -> category/signal
+  eligibility -> broad retrieval on the user's IDEAL_PARTNER -> reciprocal
   semantic reranking -> 6 finalists -> grounded LLM judgment -> surface 1.
 
-The human-readable Blueprint narrative is no longer the primary retrieval
-representation. Structured signals, their strength/confidence and evidence are.
+The two directional scores remain visible to the internal ranking logic rather
+than being flattened into a naive average. A candidate who fits the user very
+well but wants someone quite different is deliberately penalized.
 """
 from __future__ import annotations
 
@@ -29,7 +30,9 @@ BROAD_RETRIEVAL_SIZE = 24
 FINALIST_SIZE = 6
 MAX_MATCHES_SHOWN = 1
 SEMANTIC_SIGNAL_THRESHOLD = 0.58
-STRONG_FIT_THRESHOLD = 0.69
+STRONG_FIT_THRESHOLD = 0.68
+MIN_RECIPROCAL_DIRECTION_SCORE = 0.48
+LEGACY_RECIPROCITY_PENALTY = 0.82
 
 CATEGORY_WEIGHTS = {
     "personality": 1.15,
@@ -48,20 +51,23 @@ STRENGTH_WEIGHTS = {
 }
 
 MATCH_SYSTEM_PROMPT = """You are the final grounded judge for Anaphora introductions.
-The candidates have already passed eligibility, broad semantic retrieval and structured reranking.
-Your job is NOT to rescue weak candidates. Decide whether there is genuinely enough evidence to introduce each finalist.
+The finalists have already passed eligibility, semantic retrieval and RECIPROCAL reranking.
+
+You are given evidence in two distinct directions:
+1. USER WANTS -> CANDIDATE IS: how the candidate fits what the user wants.
+2. CANDIDATE WANTS -> USER IS: how the user fits what the candidate wants.
 
 For EACH candidate:
-- Set has_genuine_match=true only when the supplied evidence pairs support a specific, meaningful case.
-- A candidate must be rejected if the supplied evidence shows a clear contradiction with one of the user's HARD REQUIREMENTS.
-- Absence of evidence is not automatically a contradiction. Do not invent missing candidate traits.
-- Prefer evidence across several important categories over one superficial overlap.
-- Thin, generic or coincidental similarity is not enough.
-- If there is nothing specific and real to say, set has_genuine_match=false and leave sections empty.
+- Set has_genuine_match=true only if there is enough specific evidence for a meaningful introduction.
+- Reciprocity matters. Strong evidence in one direction must not hide clearly weak or contradictory evidence in the other.
+- A clear contradiction with an explicit hard requirement on either side is grounds for rejection.
+- Absence of evidence is not automatically a contradiction; never invent missing traits.
+- Prefer several grounded dimensions over one superficial overlap.
+- If the candidate lacks a reciprocal IDEAL_PARTNER profile, treat that as lower confidence, never as a strong reciprocal fit.
 - When genuine, write 1-4 short natural sections in Anaphora's warm, intelligent voice.
-- You may honestly name a supported tension under a heading such as "Something to explore".
-- Every sentence must be traceable to the supplied candidate narrative or evidence pairs. Never invent facts.
-- Never expose internal scores, embeddings, confidence numbers or friend-contributed commentary."""
+- You may name a supported asymmetry or tension under "Something to explore".
+- Every sentence must be traceable to supplied evidence or the candidate's own narrative.
+- Never expose scores, embeddings, confidence numbers or internal ranking mechanics."""
 
 _WORD_RE = re.compile(r"[a-z']+")
 _LABEL_STOPWORDS = {
@@ -88,12 +94,6 @@ def _has_negation(label: str) -> bool:
 
 
 def _labels_share_topic(a: str, b: str) -> bool:
-    """Deterministic compatibility fallback retained for tests/legacy use.
-
-    Iteration 3's actual reranker uses embeddings. This lexical function is
-    still useful as a high-precision exact/paraphrase fallback and for obvious
-    polarity protection.
-    """
     a_norm, b_norm = (a or "").strip().lower(), (b or "").strip().lower()
     if not a_norm or not b_norm:
         return False
@@ -109,7 +109,6 @@ def _labels_share_topic(a: str, b: str) -> bool:
 
 
 def _signal_text(signal) -> str:
-    """Structured semantic representation for one Blueprint signal."""
     label = getattr(signal, "label", None) if not isinstance(signal, dict) else signal.get("label")
     evidence = getattr(signal, "evidence_text", None) if not isinstance(signal, dict) else signal.get("evidence_text")
     category = getattr(signal, "category", None) if not isinstance(signal, dict) else signal.get("category")
@@ -117,7 +116,6 @@ def _signal_text(signal) -> str:
 
 
 def _profile_embedding_text(signals: list[BlueprintSignal]) -> str:
-    """Broad retrieval representation built from structured evidence, not narrative."""
     lines = []
     for signal in signals:
         strength = signal.strength or "preference"
@@ -161,7 +159,6 @@ def retrieve_candidates(
     age_min: int | None = None,
     age_max: int | None = None,
 ) -> list[tuple[Candidate, float]]:
-    """Cheap broad retrieval within hard demographic eligibility constraints."""
     query = db.query(Candidate, Candidate.embedding.cosine_distance(query_embedding).label("distance"))
     gender = _normalise_gender_preference(gender_preference)
     if gender and gender not in {"any", "all", "everyone"}:
@@ -175,7 +172,6 @@ def retrieve_candidates(
 
 
 def shared_signals(user_ideal_partner_signals: list[BlueprintSignal], candidate_signals: list[dict]) -> list[str]:
-    """Legacy deterministic overlap helper retained as a safe fallback."""
     candidate_labels = [c["label"] for c in candidate_signals if c.get("label")]
     matched: list[str] = []
     seen: set[str] = set()
@@ -190,35 +186,120 @@ def shared_signals(user_ideal_partner_signals: list[BlueprintSignal], candidate_
     return matched
 
 
-def _signal_weight(signal: BlueprintSignal) -> float:
+def _signal_weight(signal: BlueprintSignal | dict) -> float:
+    if isinstance(signal, dict):
+        category = signal.get("category") or ""
+        strength = signal.get("strength") or "preference"
+        confidence = signal.get("confidence")
+    else:
+        category = signal.category or ""
+        strength = signal.strength or "preference"
+        confidence = signal.confidence
     return (
-        CATEGORY_WEIGHTS.get(signal.category or "", 1.0)
-        * STRENGTH_WEIGHTS.get(signal.strength or "preference", 1.0)
-        * max(0.35, float(signal.confidence if signal.confidence is not None else 1.0))
+        CATEGORY_WEIGHTS.get(category, 1.0)
+        * STRENGTH_WEIGHTS.get(strength, 1.0)
+        * max(0.35, float(confidence if confidence is not None else 1.0))
     )
+
+
+def _group_by_category(signals: list) -> dict[str, list]:
+    grouped: dict[str, list] = defaultdict(list)
+    for signal in signals:
+        category = signal.get("category") if isinstance(signal, dict) else signal.category
+        label = signal.get("label") if isinstance(signal, dict) else signal.label
+        if category and label:
+            grouped[category].append(signal)
+    return grouped
+
+
+def _candidate_signals(candidate: Candidate, perspective: str) -> list[dict]:
+    result = []
+    for raw in candidate.signals or []:
+        raw_perspective = raw.get("perspective", "ME")
+        if raw_perspective == perspective:
+            result.append(raw)
+    return result
+
+
+def _directional_score(
+    desired_signals: list,
+    actual_signals: list,
+    vector,
+) -> tuple[float, list[str]]:
+    desired_by_category = _group_by_category(desired_signals)
+    actual_by_category = _group_by_category(actual_signals)
+    weighted_total = 0.0
+    weight_total = 0.0
+    category_scores: list[float] = []
+    evidence_pairs: list[str] = []
+
+    for category, desired_group in desired_by_category.items():
+        actual_group = actual_by_category.get(category, [])
+        if not actual_group:
+            for desired in desired_group:
+                weight_total += _signal_weight(desired)
+            continue
+
+        desired_category_text = " ; ".join(_signal_text(s) for s in desired_group)
+        actual_category_text = " ; ".join(_signal_text(s) for s in actual_group)
+        category_scores.append(max(0.0, _cosine(vector(desired_category_text), vector(actual_category_text))))
+
+        for desired in desired_group:
+            desired_label = desired.get("label", "") if isinstance(desired, dict) else desired.label or ""
+            best = None
+            best_similarity = -1.0
+            for actual in actual_group:
+                actual_label = actual.get("label", "") if isinstance(actual, dict) else actual.label or ""
+                if _has_negation(desired_label) != _has_negation(actual_label):
+                    continue
+                sim = _cosine(vector(_signal_text(desired)), vector(_signal_text(actual)))
+                if sim > best_similarity:
+                    best_similarity = sim
+                    best = actual
+
+            weight = _signal_weight(desired)
+            weight_total += weight
+            weighted_total += weight * max(0.0, best_similarity if best is not None else 0.0)
+
+            if best is not None and best_similarity >= SEMANTIC_SIGNAL_THRESHOLD:
+                desired_strength = desired.get("strength", "preference") if isinstance(desired, dict) else desired.strength or "preference"
+                desired_text = desired.get("label") if isinstance(desired, dict) else desired.label
+                actual_text = best.get("label") if isinstance(best, dict) else best.label
+                evidence_pairs.append(
+                    f"{category}: wants '{desired_text}' ({desired_strength}); evidence '{actual_text}'"
+                )
+
+    atomic_score = weighted_total / weight_total if weight_total else 0.0
+    category_score = sum(category_scores) / len(category_scores) if category_scores else 0.0
+    return 0.78 * atomic_score + 0.22 * category_score, evidence_pairs
+
+
+def _reciprocal_score(forward: float, reverse: float | None, broad_similarity: float) -> float:
+    """Combine directions without hiding asymmetry behind a simple average.
+
+    The weaker direction matters substantially. A high forward score cannot
+    compensate for a poor reverse score. Legacy candidates without an
+    IDEAL_PARTNER profile remain explorable but receive a confidence penalty.
+    """
+    if reverse is None:
+        return (0.90 * forward + 0.10 * broad_similarity) * LEGACY_RECIPROCITY_PENALTY
+    weaker = min(forward, reverse)
+    stronger = max(forward, reverse)
+    balance = 1.0 - abs(forward - reverse)
+    return 0.55 * weaker + 0.25 * stronger + 0.10 * balance + 0.10 * broad_similarity
 
 
 def semantic_rerank_candidates(
     retrieved: list[tuple[Candidate, float]],
-    user_signals: list[BlueprintSignal],
+    user_ideal_signals: list[BlueprintSignal],
+    user_me_signals: list[BlueprintSignal] | None = None,
     finalist_size: int = FINALIST_SIZE,
-) -> list[tuple[Candidate, float, list[str]]]:
-    """Rerank broad results by same-category semantic evidence.
-
-    One batched embedding call covers all unique user/candidate atomic signals
-    and category summaries. The score rewards strong evidence across important
-    categories while keeping broad profile similarity as a small tie-breaker.
-    Evidence strings are retained for the final LLM rather than exposing scores.
-    """
-    if not retrieved or not user_signals:
+) -> list[tuple[Candidate, float, float, float | None, list[str], bool]]:
+    """Reciprocal reranking while preserving directional asymmetry."""
+    if not retrieved or not user_ideal_signals:
         return []
+    user_me_signals = user_me_signals or []
 
-    user_by_category: dict[str, list[BlueprintSignal]] = defaultdict(list)
-    for signal in user_signals:
-        if signal.label and signal.category:
-            user_by_category[signal.category].append(signal)
-
-    candidate_by_category: dict[str, dict[str, list[dict]]] = {}
     all_texts: list[str] = []
     text_index: dict[str, int] = {}
 
@@ -227,20 +308,17 @@ def semantic_rerank_candidates(
             text_index[text] = len(all_texts)
             all_texts.append(text)
 
-    for signals in user_by_category.values():
+    def add_signal_set(signals: list) -> None:
         for signal in signals:
             add_text(_signal_text(signal))
-        add_text(" ; ".join(_signal_text(s) for s in signals))
-
-    for candidate, _ in retrieved:
-        grouped: dict[str, list[dict]] = defaultdict(list)
-        for raw in candidate.signals or []:
-            if raw.get("label") and raw.get("category"):
-                grouped[raw["category"]].append(raw)
-                add_text(_signal_text(raw))
-        for values in grouped.values():
+        for values in _group_by_category(signals).values():
             add_text(" ; ".join(_signal_text(s) for s in values))
-        candidate_by_category[candidate.id] = grouped
+
+    add_signal_set(user_ideal_signals)
+    add_signal_set(user_me_signals)
+    for candidate, _ in retrieved:
+        add_signal_set(_candidate_signals(candidate, "ME"))
+        add_signal_set(_candidate_signals(candidate, "IDEAL_PARTNER"))
 
     if not all_texts:
         return []
@@ -251,55 +329,22 @@ def semantic_rerank_candidates(
     def vector(text: str) -> list[float]:
         return vectors[text_index[text]]
 
-    reranked: list[tuple[Candidate, float, list[str]]] = []
+    reranked = []
     for candidate, broad_similarity in retrieved:
-        grouped = candidate_by_category.get(candidate.id, {})
-        weighted_total = 0.0
-        weight_total = 0.0
-        category_scores: list[float] = []
-        evidence_pairs: list[str] = []
+        candidate_me = _candidate_signals(candidate, "ME")
+        candidate_ideal = _candidate_signals(candidate, "IDEAL_PARTNER")
+        forward, forward_evidence = _directional_score(user_ideal_signals, candidate_me, vector)
 
-        for category, desired_signals in user_by_category.items():
-            candidate_signals = grouped.get(category, [])
-            if not candidate_signals:
-                continue
+        reciprocal_complete = bool(candidate_ideal and user_me_signals)
+        if reciprocal_complete:
+            reverse, reverse_evidence = _directional_score(candidate_ideal, user_me_signals, vector)
+        else:
+            reverse, reverse_evidence = None, []
 
-            user_category_text = " ; ".join(_signal_text(s) for s in desired_signals)
-            candidate_category_text = " ; ".join(_signal_text(s) for s in candidate_signals)
-            category_similarity = max(0.0, _cosine(vector(user_category_text), vector(candidate_category_text)))
-            category_scores.append(category_similarity)
-
-            for desired in desired_signals:
-                best = None
-                best_similarity = -1.0
-                for actual in candidate_signals:
-                    # Embeddings notoriously place antonyms/negations near each
-                    # other. Keep the deterministic polarity guard for obvious
-                    # cases before accepting a semantic pair.
-                    if _has_negation(desired.label or "") != _has_negation(actual.get("label", "")):
-                        continue
-                    sim = _cosine(vector(_signal_text(desired)), vector(_signal_text(actual)))
-                    if sim > best_similarity:
-                        best_similarity = sim
-                        best = actual
-
-                weight = _signal_weight(desired)
-                weight_total += weight
-                contribution = max(0.0, best_similarity) if best is not None else 0.0
-                weighted_total += weight * contribution
-
-                if best is not None and best_similarity >= SEMANTIC_SIGNAL_THRESHOLD:
-                    evidence_pairs.append(
-                        f"{category}: user wants '{desired.label}' ({desired.strength or 'preference'}); "
-                        f"candidate evidence '{best.get('label')}'"
-                    )
-
-        atomic_score = weighted_total / weight_total if weight_total else 0.0
-        category_score = sum(category_scores) / len(category_scores) if category_scores else 0.0
-        # Structured evidence dominates. Broad vector similarity only helps
-        # recall/tie-breaking after eligibility, rather than defining fit.
-        score = 0.68 * atomic_score + 0.22 * category_score + 0.10 * broad_similarity
-        reranked.append((candidate, score, evidence_pairs))
+        score = _reciprocal_score(forward, reverse, broad_similarity)
+        evidence = [f"USER WANTS -> CANDIDATE IS: {item}" for item in forward_evidence]
+        evidence.extend(f"CANDIDATE WANTS -> USER IS: {item}" for item in reverse_evidence)
+        reranked.append((candidate, score, forward, reverse, evidence, reciprocal_complete))
 
     reranked.sort(key=lambda item: item[1], reverse=True)
     return reranked[:finalist_size]
@@ -307,7 +352,7 @@ def semantic_rerank_candidates(
 
 def judge_and_explain_candidates(
     user_context: str,
-    candidates: list[tuple[Candidate, list[str]]],
+    candidates: list[tuple[Candidate, list[str], bool]],
     hard_requirements: list[str] | None = None,
 ) -> dict[str, tuple[bool, list[MatchSection]]]:
     if not candidates:
@@ -315,18 +360,21 @@ def judge_and_explain_candidates(
 
     hard_block = "\n".join(f"- {item}" for item in (hard_requirements or [])) or "- none explicitly established"
     candidates_block = "\n\n".join(
-        f"candidate_id: {c.id}\n"
-        f"candidate's own narrative: {c.narrative or '(none)'}\n"
-        f"grounded evidence pairs:\n" + ("\n".join(f"- {item}" for item in evidence) if evidence else "- none")
-        for c, evidence in candidates
+        f"candidate_id: {candidate.id}\n"
+        f"candidate's own narrative: {candidate.narrative or '(none)'}\n"
+        f"reciprocal profile complete: {'yes' if reciprocal_complete else 'no'}\n"
+        f"grounded reciprocal evidence:\n" + (
+            "\n".join(f"- {item}" for item in evidence) if evidence else "- none"
+        )
+        for candidate, evidence, reciprocal_complete in candidates
     )
     llm = ChatOpenAI(model=settings.openai_model, temperature=0.2, api_key=settings.openai_api_key)
     structured_llm = llm.with_structured_output(MatchExplanationsResult)
     result = structured_llm.invoke([
         {"role": "system", "content": MATCH_SYSTEM_PROMPT},
         {"role": "user", "content": (
-            f"Structured description of what the user wants:\n{user_context}\n\n"
-            f"Explicit hard requirements:\n{hard_block}\n\nFinalists:\n{candidates_block}"
+            f"Structured description of the user:\n{user_context}\n\n"
+            f"User hard requirements:\n{hard_block}\n\nFinalists:\n{candidates_block}"
         )},
     ])
     return {
@@ -339,17 +387,16 @@ def find_matches(
     db: Session,
     user_narrative: str,
     user_ideal_partner_signals: list[BlueprintSignal],
+    user_me_signals: list[BlueprintSignal] | None = None,
     gender_preference: str | None = None,
     age_min: int | None = None,
     age_max: int | None = None,
 ) -> list[MatchOut]:
-    """Return at most one high-quality introduction for the current user."""
+    """Return at most one reciprocal introduction."""
     if not user_ideal_partner_signals:
         return []
+    user_me_signals = user_me_signals or []
 
-    # The narrative is intentionally ignored for retrieval. It remains useful
-    # to the product UI, but structured Blueprint evidence is the matching
-    # source of truth after Iteration 2.
     query_text = _profile_embedding_text(user_ideal_partner_signals)
     query_embedding = embed_text(query_text)
     retrieved = retrieve_candidates(
@@ -360,23 +407,31 @@ def find_matches(
         age_min=age_min,
         age_max=age_max,
     )
-    finalists = semantic_rerank_candidates(retrieved, user_ideal_partner_signals, FINALIST_SIZE)
+    finalists = semantic_rerank_candidates(
+        retrieved,
+        user_ideal_partner_signals,
+        user_me_signals=user_me_signals,
+        finalist_size=FINALIST_SIZE,
+    )
 
-    structured_user_context = _profile_embedding_text(user_ideal_partner_signals)
+    user_context = (
+        "USER IDEAL_PARTNER:\n" + _profile_embedding_text(user_ideal_partner_signals)
+        + "\n\nUSER ME:\n" + _profile_embedding_text(user_me_signals)
+    )
     hard_requirements = [
         f"{s.category}: {s.label}"
         for s in user_ideal_partner_signals
         if s.strength == "hard_requirement" and (s.confidence is None or s.confidence >= 0.70)
     ]
     judged = judge_and_explain_candidates(
-        structured_user_context,
-        [(candidate, evidence) for candidate, _score, evidence in finalists],
+        user_context,
+        [(candidate, evidence, reciprocal_complete) for candidate, _score, _forward, _reverse, evidence, reciprocal_complete in finalists],
         hard_requirements=hard_requirements,
     )
 
     genuine = [
-        (candidate, score, evidence, sections)
-        for candidate, score, evidence in finalists
+        (candidate, score, forward, reverse, evidence, reciprocal_complete, sections)
+        for candidate, score, forward, reverse, evidence, reciprocal_complete in finalists
         for has_genuine, sections in [judged.get(candidate.id, (False, []))]
         if has_genuine and sections
     ][:MAX_MATCHES_SHOWN]
@@ -386,10 +441,15 @@ def find_matches(
             candidate=CandidateOut.model_validate(candidate),
             fit=(
                 FitLevel.strong_fit
-                if score >= STRONG_FIT_THRESHOLD and len(evidence) >= 3
+                if reciprocal_complete
+                and reverse is not None
+                and forward >= MIN_RECIPROCAL_DIRECTION_SCORE
+                and reverse >= MIN_RECIPROCAL_DIRECTION_SCORE
+                and score >= STRONG_FIT_THRESHOLD
+                and len(evidence) >= 4
                 else FitLevel.worth_exploring
             ),
             sections=sections,
         )
-        for candidate, score, evidence, sections in genuine
+        for candidate, score, forward, reverse, evidence, reciprocal_complete, sections in genuine
     ]
