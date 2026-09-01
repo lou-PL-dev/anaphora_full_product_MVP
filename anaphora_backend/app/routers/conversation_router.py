@@ -10,6 +10,8 @@ from ..schemas import (
 )
 from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete, side_ready
 from ..chains.extraction_chain import extract_blueprint
+from ..chains.input_segmentation import is_long_input
+from ..chains.long_input_chain import digest_long_input, format_processing_summary
 from ..readiness import compute_readiness, category_coverage
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
@@ -52,7 +54,11 @@ def send_message(
     known_me, known_ideal = category_coverage(signals)
 
     history = list(convo.messages)
-    history.append({"role": "user", "content": body.message})
+    user_message = {"role": "user", "content": body.message}
+    if is_long_input(body.message):
+        digest = digest_long_input(body.message)
+        user_message["processing_summary"] = format_processing_summary(digest)
+    history.append(user_message)
 
     turn = converse(history, known_me=known_me, known_ideal=known_ideal)
     history.append({"role": "assistant", "content": turn.reply})
