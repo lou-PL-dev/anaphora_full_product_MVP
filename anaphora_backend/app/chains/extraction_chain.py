@@ -26,6 +26,10 @@ Return the same seven categories for both perspectives: personality, lifestyle, 
 
 After reconciling the structured signals, write ONE flowing human-readable portrait of the IDEAL_PARTNER. The narrative is only a presentation layer over the structured evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
 
+LEGACY_TRANSCRIPT_PROMPT = """This is a legacy Anaphora conversation created before atomic observations were stored. Extract a structured Relationship Blueprint from the transcript so the user can finish their existing conversation.
+
+Keep ME and IDEAL_PARTNER strictly separate. Use only supported facts, preserve tensions instead of smoothing them away, assign hard_requirement only when explicitly non-negotiable, keep confidence conservative, and retain short evidence phrases. Then write a human-readable IDEAL_PARTNER narrative as a presentation layer over those signals."""
+
 
 def observations_from_history(history: list[dict]) -> list[ConversationObservation]:
     """Collect canonical observations stored on user turns, preserving order."""
@@ -50,16 +54,30 @@ def reconcile_blueprint(observations: list[ConversationObservation]) -> Extracti
     )
     return structured_llm.invoke([
         {"role": "system", "content": RECONCILIATION_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Accumulated observations:\n\n{payload or '(none)'}"},
+        {"role": "user", "content": f"Accumulated observations:\n\n{payload}"},
+    ])
+
+
+def _legacy_extract(history: list[dict]) -> ExtractionResult:
+    """Backward compatibility only for conversations predating Iteration 2."""
+    lines = []
+    for message in history:
+        speaker = "User" if message.get("role") == "user" else "Anaphora"
+        content = message.get("processing_summary") or message.get("content", "")
+        lines.append(f"{speaker}: {content}")
+    transcript = "\n".join(lines)
+
+    llm = ChatOpenAI(model=settings.openai_model, temperature=0, api_key=settings.openai_api_key)
+    structured_llm = llm.with_structured_output(ExtractionResult)
+    return structured_llm.invoke([
+        {"role": "system", "content": LEGACY_TRANSCRIPT_PROMPT},
+        {"role": "user", "content": f"Transcript:\n\n{transcript}"},
     ])
 
 
 def extract_blueprint(history: list[dict]) -> ExtractionResult:
-    """Compatibility entry point: reconcile from stored observations.
-
-    Iteration 2 intentionally stops re-reading the entire raw transcript at
-    completion. Raw messages remain stored for traceability, but structured
-    observations drive the canonical Blueprint.
-    """
+    """Reconcile from canonical observations; fall back only for legacy data."""
     observations = observations_from_history(history)
-    return reconcile_blueprint(observations)
+    if observations:
+        return reconcile_blueprint(observations)
+    return _legacy_extract(history)
