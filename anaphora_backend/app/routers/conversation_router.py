@@ -27,8 +27,6 @@ OPENING_PROMPT_ME_FOCUSED = (
 def start_conversation(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
     known_me, known_ideal = category_coverage(signals)
-    # A follow-up "Add more" conversation shouldn't default to asking about
-    # the ideal partner again if that side is already the well-covered one.
     opening = OPENING_PROMPT_ME_FOCUSED if side_ready(known_ideal) and not side_ready(known_me) else OPENING_PROMPT
 
     convo = Conversation(user_id=user.id, messages=[{"role": "assistant", "content": opening}])
@@ -55,14 +53,22 @@ def send_message(
 
     history = list(convo.messages)
     user_message = {"role": "user", "content": body.message}
+    long_digest = None
     if is_long_input(body.message):
-        digest = digest_long_input(body.message)
-        user_message["processing_summary"] = format_processing_summary(digest)
+        long_digest = digest_long_input(body.message)
+        user_message["processing_summary"] = format_processing_summary(long_digest)
     history.append(user_message)
 
     turn = converse(history, known_me=known_me, known_ideal=known_ideal)
-    history.append({"role": "assistant", "content": turn.reply})
 
+    # Canonical machine memory lives on the original user turn. Long messages
+    # use the chunk-aware digest observations; ordinary messages reuse the
+    # observations returned by the same conversational LLM call, avoiding an
+    # extra extraction request.
+    observations = long_digest.observations if long_digest and long_digest.observations else turn.observations
+    user_message["observations"] = [obs.model_dump(mode="json") for obs in observations]
+
+    history.append({"role": "assistant", "content": turn.reply})
     convo.messages = history
     db.add(convo)
     db.commit()
@@ -87,13 +93,9 @@ def complete_conversation(
     if convo.status == "completed":
         raise HTTPException(400, "Conversation already completed — signals were already extracted")
 
+    # Reconciliation is now driven by the accumulated structured observations,
+    # not by an LLM re-reading and re-summarising the entire raw transcript.
     result = extract_blueprint(convo.messages)
-
-    # Multiple conversations (the "Add more" flow) each cover their own
-    # ground — a follow-up conversation about values shouldn't erase what
-    # an earlier one established about lifestyle. Replace only the
-    # (perspective, category) pairs this extraction actually has fresh
-    # data for, and leave every other conversation-sourced signal alone.
     created: list[BlueprintSignal] = []
 
     def _store(perspective: str, category: str, items) -> None:
@@ -114,6 +116,7 @@ def complete_conversation(
                 strength=item.strength.value,
                 source="conversation",
                 evidence_text=item.evidence_text,
+                confidence=item.confidence,
             )
             db.add(signal)
             created.append(signal)
@@ -122,8 +125,9 @@ def complete_conversation(
         _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
         _store("ME", category, getattr(result.me, category))
 
-    # Same reasoning for the narrative: a follow-up conversation's summary
-    # should add to the Blueprint narrative, not replace it outright.
+    # Narrative is a human-readable projection of this reconciled state. A
+    # follow-up conversation adds another projection without deleting earlier
+    # structured categories that were not revisited.
     user.blueprint_narrative = (
         f"{user.blueprint_narrative}\n\n{result.narrative}"
         if user.blueprint_narrative else result.narrative
