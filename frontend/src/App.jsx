@@ -245,7 +245,7 @@ export default function App() {
     { key: 'me', title: 'Tell me who you are', note: aboutMeReady ? 'Enough about you' : 'Help Anaphora understand you too', done: aboutMeReady, cta: aboutMeReady ? 'Add more' : (s.messages.length ? 'Continue' : 'Start'), onGo: resumeConversation },
     { key: 'disc', title: 'What kind of life are you building?', note: s.discoverySaving && s.discoveryId === DEFAULT_DISCOVERY_ID ? 'Adding insight to your Blueprint…' : (lifeDone ? 'Insight added to your Blueprint' : 'A Discovery — 4 questions'), done: lifeDone, cta: s.discoverySaving && s.discoveryId === DEFAULT_DISCOVERY_ID ? 'Adding…' : (lifeDone ? 'Done' : '2 min'), onGo: lifeDone ? go('insight') : (() => startDiscovery(DEFAULT_DISCOVERY_ID, 'home')) },
     { key: 'prefs', title: 'Basic matching preferences', note: s.preferencesSaved ? s.gender + ' · ' + s.ageMin + '–' + s.ageMax : 'Who and what age range', done: s.preferencesSaved, cta: s.preferencesSaved ? 'Edit' : 'Set', onGo: go('profile') },
-  ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : 'rgba(47,74,63,.22)', fill: st.done ? SAGE : 'transparent' }));
+  ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : '#DDEAE6', fill: st.done ? SAGE : 'transparent' }));
   const refinementActions = [
     { key: 'talk', title: 'Talk to Anaphora', note: 'Add nuance about you or the person you’re looking for', cta: 'Continue', onGo: resumeConversation },
     { key: 'discover', title: 'Explore another Discovery', note: 'Reflect on chemistry, affection, values and everyday life', cta: 'Discover', onGo: go('convos') },
@@ -278,11 +278,11 @@ export default function App() {
   const readinessCopy = readiness >= 90 ? ['Ready when you are', 'We know enough to look for people who actually fit.'] : readiness >= 60 ? ['Coming into focus', 'A little more and intros start making real sense.'] : readiness > 0 ? ['A good beginning', 'Every answer sharpens who we look for.'] : ['Nothing yet', 'One conversation is all it takes to start.'];
   const dqOptions = (q.options || []).map((o) => {
     const selected = o.id === 'other' ? otherSelected : ans === o.label;
-    return { key: o.id, label: o.label, onPick: pickOption(q.id, o), border: selected ? accent : 'rgba(47,74,63,.1)', bg: selected ? 'rgba(166,154,205,.1)' : '#FFFFFF' };
+    return { key: o.id, label: o.label, onPick: pickOption(q.id, o), border: selected ? accent : '#DDEAE6', bg: selected ? 'rgba(166,154,205,.1)' : '#FFFFFF' };
   });
-  const strengthOptions = STRENGTHS.map(([v, label, note]) => ({ key: v, label, note, onPick: pickStrength(v), border: s.editStrength === v ? accent : 'rgba(47,74,63,.12)', bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF' }));
+  const strengthOptions = STRENGTHS.map(([v, label, note]) => ({ key: v, label, note, onPick: pickStrength(v), border: s.editStrength === v ? accent : '#DDEAE6', bg: s.editStrength === v ? 'rgba(166,154,205,.1)' : '#FFFFFF' }));
   const modeLabel = s.mode === 'live' ? 'Live backend' : (s.mode === 'offline' ? 'Backend offline' : 'Connecting…');
-  const modeDot = s.mode === 'live' ? '#4C8C6A' : (s.mode === 'offline' ? '#B04A3A' : '#C9C2B8');
+  const modeDot = s.mode === 'live' ? SAGE : (s.mode === 'offline' ? LAV : '#DDEAE6');
 
   let screenEl = null;
   switch (s.screen) {
@@ -297,7 +297,7 @@ export default function App() {
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
     case 'friends': screenEl = <Friends />; break;
-    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
+    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onSavePreferences} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
     default: screenEl = null;
   }
 
