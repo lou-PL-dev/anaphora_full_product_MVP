@@ -149,8 +149,20 @@ def test_sample_category_ingredients_covers_every_narrative_category():
     for perspective in ("ME", "IDEAL_PARTNER"):
         ingredients = sample_category_ingredients(rng, perspective)
         assert set(ingredients) == set(NARRATIVE_CATEGORIES)
-        for category, label in ingredients.items():
-            assert label in CANDIDATE_LABELS[(perspective, category)]
+        for category, labels in ingredients.items():
+            assert len(labels) == 2
+            assert len(set(labels)) == len(labels)  # distinct, no repeats within a category
+            for label in labels:
+                assert label in CANDIDATE_LABELS[(perspective, category)]
+
+
+def test_sample_category_ingredients_clamps_to_pool_size():
+    """count higher than a category's label pool must not raise or repeat
+    labels — just return everything the pool has."""
+    rng = random.Random(9)
+    ingredients = sample_category_ingredients(rng, "ME", count=1000)
+    for category, labels in ingredients.items():
+        assert set(labels) == set(CANDIDATE_LABELS[("ME", category)])
 
 
 def test_offline_self_narrative_includes_ingredients():
@@ -158,8 +170,9 @@ def test_offline_self_narrative_includes_ingredients():
     profile = sample_trait_profile(rng)
     ingredients = sample_category_ingredients(rng, "ME")
     narrative = offline_self_narrative(profile, ingredients)
-    for label in ingredients.values():
-        assert label in narrative
+    for labels in ingredients.values():
+        for label in labels:
+            assert label in narrative
 
 
 @pytest.mark.skipif(not _HAS_LLM_CREDENTIALS, reason="needs a real OPENAI_API_KEY to call the LLM + extraction chain")

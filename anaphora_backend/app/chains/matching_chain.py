@@ -8,6 +8,8 @@ not soft semantic signals. They are applied before vector retrieval so an
 otherwise-similar candidate outside those preferences never enters the
 shortlist.
 """
+import re
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from sqlalchemy.orm import Session
 
@@ -35,8 +37,65 @@ tension under a heading like "Something to explore" if the narratives genuinely 
 a shared interest, value, or trait. Never expose friend-contributed commentary."""
 
 
-def _signal_labels(signals: list[dict]) -> set[str]:
-    return {s["label"].strip().lower() for s in signals if s.get("label")}
+_WORD_RE = re.compile(r"[a-z']+")
+
+# Pure function words, stripped before comparing labels. Deliberately does
+# NOT include affect verbs ("loves"/"avoids"/"dislikes") — those carry the
+# polarity information _labels_share_topic's negation guard depends on.
+_LABEL_STOPWORDS = {
+    "a", "an", "and", "or", "the", "of", "to", "in", "on", "for", "at", "with",
+    "is", "are", "be", "being", "someone", "something", "person", "people",
+    "their", "they", "them", "that", "this", "these", "those", "it", "its",
+    "own", "very", "really", "quite", "much", "who", "who's",
+}
+
+# A candidate's dealbreaker ("avoids clutter") and a user's opposite
+# preference ("loves a tidy home") can share a topic word without being any
+# kind of match — this fixed list of negation/avoidance markers guards that
+# specific failure mode. It does NOT catch true antonym pairs outside this
+# list (e.g. "early riser" vs "late riser") — that needs real semantics
+# (embeddings/LLM), which this deliberately-offline, deterministic function
+# doesn't have access to. The len(overlap) >= 2 rule below is the main
+# defense against that broader class: a single shared word is never enough.
+_NEGATION_MARKERS = {
+    "avoid", "avoids", "avoiding", "dislike", "dislikes", "hate", "hates",
+    "refuse", "refuses", "not", "no", "never", "isn't", "aren't", "wasn't",
+    "won't", "wouldn't", "can't", "cannot", "don't", "doesn't", "didn't",
+    "without", "lack", "lacks", "lacking", "unwilling", "dealbreaker",
+}
+
+
+def _label_tokens(label: str) -> set[str]:
+    words = _WORD_RE.findall(label.lower())
+    return {w for w in words if w not in _LABEL_STOPWORDS and len(w) > 2}
+
+
+def _labels_share_topic(a: str, b: str) -> bool:
+    """True if two short trait labels are genuinely about the same thing.
+
+    Exact (case-insensitive) equality always counts. Beyond that, this is a
+    lexical heuristic, not real semantic matching: two independently
+    LLM-extracted labels for the same underlying trait ("loves cooking at
+    home" vs "enjoys cooking at home together") almost never come out as
+    identical strings, so a pure exact-match comparison misses most real
+    overlap. This trades some recall on true synonyms with zero shared
+    words for a comparison that stays deterministic and needs no API call
+    (see test_matching.py's "deterministic shared_signals logic") —
+    requiring at least 2 shared content words (not just 1) plus the
+    negation guard above is the safety margin against a coincidental
+    shared noun producing a false "shared signal"."""
+    a_norm, b_norm = a.strip().lower(), b.strip().lower()
+    if not a_norm or not b_norm:
+        return False
+    if a_norm == b_norm:
+        return True
+    a_tokens, b_tokens = _label_tokens(a_norm), _label_tokens(b_norm)
+    if bool(a_tokens & _NEGATION_MARKERS) != bool(b_tokens & _NEGATION_MARKERS):
+        return False
+    overlap = a_tokens & b_tokens
+    if len(overlap) < 2:
+        return False
+    return len(overlap) / min(len(a_tokens), len(b_tokens)) >= 0.5
 
 
 def _embedding_text(narrative: str, signal_labels: list[str]) -> str:
@@ -94,9 +153,23 @@ def retrieve_candidates(
 
 
 def shared_signals(user_ideal_partner_signals: list[BlueprintSignal], candidate_signals: list[dict]) -> list[str]:
-    user_labels = {s.label.strip().lower(): s.label for s in user_ideal_partner_signals}
-    candidate_labels = _signal_labels(candidate_signals)
-    return [user_labels[label] for label in candidate_labels if label in user_labels]
+    """The user's own label text for every IDEAL_PARTNER signal that has a
+    real counterpart among the candidate's own labels — see
+    _labels_share_topic for what counts as "real". Returns the user's
+    original label wording (not the candidate's), in the user's signal
+    order, deduplicated."""
+    candidate_labels = [c["label"] for c in candidate_signals if c.get("label")]
+    matched: list[str] = []
+    seen: set[str] = set()
+    for signal in user_ideal_partner_signals:
+        label = signal.label
+        key = label.strip().lower() if label else ""
+        if not key or key in seen:
+            continue
+        if any(_labels_share_topic(label, candidate_label) for candidate_label in candidate_labels):
+            matched.append(label)
+            seen.add(key)
+    return matched
 
 
 def judge_and_explain_candidates(
