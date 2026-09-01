@@ -30,16 +30,16 @@ def get_matches(user: User = Depends(get_current_user), db: Session = Depends(ge
     if readiness_pct < 100:
         return MatchListResponse(ready=False, readiness_pct=readiness_pct, matches=[])
 
-    ideal_partner_signals = (
-        db.query(BlueprintSignal)
-        .filter(BlueprintSignal.user_id == user.id, BlueprintSignal.perspective == "IDEAL_PARTNER")
-        .all()
-    )
+    signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
+    ideal_partner_signals = [s for s in signals if s.perspective == "IDEAL_PARTNER"]
+    me_signals = [s for s in signals if s.perspective == "ME"]
+
     age_min, age_max = _preferred_age_bounds(user.preferred_age_range)
     matches = find_matches(
         db,
         user.blueprint_narrative or "",
         ideal_partner_signals,
+        user_me_signals=me_signals,
         gender_preference=user.gender_preference,
         age_min=age_min,
         age_max=age_max,
