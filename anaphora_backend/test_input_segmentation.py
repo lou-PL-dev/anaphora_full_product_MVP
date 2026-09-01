@@ -17,12 +17,13 @@ def test_short_input_is_unchanged():
 
 def test_long_input_is_split_without_losing_content():
     paragraphs = [
-        "I care a lot about emotional steadiness. " + ("They should be able to talk through conflict calmly. " * 30),
-        "I also love someone with their own world. " + ("They can have hobbies and friendships that are theirs. " * 30),
-        "And day to day I am quite home-oriented. " + ("A quiet evening together sounds genuinely good to me. " * 30),
+        "I care a lot about emotional steadiness. " + ("They should be able to talk through conflict calmly. " * 50),
+        "I also love someone with their own world. " + ("They can have hobbies and friendships that are theirs. " * 50),
+        "And day to day I am quite home-oriented. " + ("A quiet evening together sounds genuinely good to me. " * 50),
     ]
     text = "\n\n".join(paragraphs)
 
+    assert is_long_input(text) is True
     chunks = segment_long_input(text)
 
     assert len(chunks) > 1
