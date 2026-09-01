@@ -1,8 +1,8 @@
-html, body { margin: 0; padding: 0; background: #EDE8E1; }
+html, body { margin: 0; padding: 0; background: #F2EDE6; }
 * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 body { font-family: Inter, system-ui, sans-serif; }
 a { color: #A69ACD; text-decoration: none; }
-a:hover { color: #8C7FBE; }
+a:hover { color: #2F4A3F; }
 input, textarea, button { font-family: inherit; }
 ::-webkit-scrollbar { width: 0; height: 0; }
 
@@ -16,15 +16,15 @@ input, textarea, button { font-family: inherit; }
 input[type=range].ap-sl {
   -webkit-appearance: none; appearance: none;
   accent-color: #2F4A3F; height: 3px; border-radius: 2px;
-  background: linear-gradient(90deg,#2F4A3F,#A69ACD); outline: none;
+  background: linear-gradient(90deg,#DDEAE6,#A69ACD); outline: none;
 }
 input[type=range].ap-sl::-moz-range-thumb {
   width: 30px; height: 30px; border-radius: 50%; background: #FFFFFF;
-  border: 1px solid rgba(47,74,63,.16); box-shadow: 0 4px 14px rgba(47,74,63,.18); cursor: grab;
+  border: 1px solid #DDEAE6; box-shadow: 0 4px 14px rgba(166,154,205,.18); cursor: grab;
 }
 input[type=range].ap-sl::-webkit-slider-thumb {
   -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%; background: #FFFFFF;
-  border: 1px solid rgba(47,74,63,.16); box-shadow: 0 4px 14px rgba(47,74,63,.18); cursor: grab;
+  border: 1px solid #DDEAE6; box-shadow: 0 4px 14px rgba(166,154,205,.18); cursor: grab;
 }
 
 button { border: none; background: none; }
