@@ -28,7 +28,7 @@ import random
 import sys
 from pathlib import Path
 
-from profiles import Persona, Signal, build_index, retrieve_similar
+from profiles import CANDIDATE_LABELS, Persona, Signal, build_index, retrieve_similar
 from trait_distributions import ATTACHMENT_STYLES, BIG_FIVE_TRAITS, sample_trait_profile
 
 # anaphora_backend has no __init__.py files (plain namespace packages) —
@@ -98,14 +98,41 @@ ATTACHMENT_DESCRIPTIONS = {
 }
 
 
-def describe_trait_profile(trait_profile: dict) -> str:
+# The trait sampler only ever covers personality (Big Five) and
+# relationship_dynamic (attachment style) — it says nothing about the other
+# 5 Blueprint categories. Left alone, that meant every candidate narrative
+# only ever had material to touch 2 of the 7 categories real users are now
+# extracted across, so candidates almost never reached the "5 of 7 including
+# personality/lifestyle/relationship_dynamic" bar readiness.py requires of
+# real users — see dataset_documentation.md's "Candidate depth fix" note.
+# These 5 categories borrow the SAME curated label pools profiles.py's
+# baseline generator already uses, rather than inventing a second set.
+NARRATIVE_CATEGORIES = ["lifestyle", "physical_type", "love_language", "dealbreakers", "values"]
+
+
+def sample_category_ingredients(rng: random.Random, perspective: str) -> dict[str, str]:
+    """One concrete detail per category the trait sampler doesn't cover,
+    so the narrative-writing prompt has something to say about all 7."""
+    return {
+        category: rng.choice(CANDIDATE_LABELS[(perspective, category)])
+        for category in NARRATIVE_CATEGORIES
+    }
+
+
+def describe_trait_profile(trait_profile: dict, category_ingredients: dict[str, str] | None = None) -> str:
     bf = trait_profile["big_five"]
     phrases = [BIG_FIVE_DESCRIPTIONS[(t, bf[t])] for t in BIG_FIVE_TRAITS]
     attach = ATTACHMENT_DESCRIPTIONS[trait_profile["attachment_style"]]
-    return "; ".join(phrases) + f". In relationships, they are {attach}."
+    description = "; ".join(phrases) + f". In relationships, they are {attach}."
+    if category_ingredients:
+        extra = "; ".join(label for label in category_ingredients.values())
+        description += f" Also true of them: {extra}."
+    return description
 
 
-def build_narrative_prompt(trait_profile: dict, style_examples: list[str]) -> list[dict]:
+def build_narrative_prompt(
+    trait_profile: dict, style_examples: list[str], category_ingredients: dict[str, str] | None = None
+) -> list[dict]:
     """Chat messages for the narrative-writing call. The trait sketch sets
     WHAT to describe (the ideal partner's traits); the style examples set
     HOW to say it (register only — the model is told explicitly not to
@@ -114,7 +141,7 @@ def build_narrative_prompt(trait_profile: dict, style_examples: list[str]) -> li
     system = (
         "You write short, natural first-person messages for a synthetic test "
         "dataset, as if a user were describing the partner they'd love to meet "
-        "to a matchmaking app. Write ONE paragraph (3-5 sentences), casual and "
+        "to a matchmaking app. Write ONE paragraph (4-7 sentences), casual and "
         "specific, never a list, never clinical or like a personality-test "
         "report — a real person talking, not a psychology summary.\n\n"
         "Match the REGISTER of these examples (tone, specificity, imperfection) "
@@ -123,26 +150,30 @@ def build_narrative_prompt(trait_profile: dict, style_examples: list[str]) -> li
     )
     user = (
         "Write that message for someone whose ideal partner would be described "
-        "this way: " + describe_trait_profile(trait_profile) + "\n\n"
+        "this way: " + describe_trait_profile(trait_profile, category_ingredients) + "\n\n"
         "Translate those traits into ordinary, concrete language and specific "
         "little details — never name a trait directly (no 'high conscientiousness', "
-        "no 'secure attachment'). End with one brief, natural sentence revealing "
-        "something small about the speaker themselves, the way people naturally "
-        "do when describing what they want."
+        "no 'secure attachment'). Naturally weave in a sense of their lifestyle, "
+        "physical presence, how they show love, a real dealbreaker, and what they "
+        "value — as part of the story, never a checklist. End with one brief, "
+        "natural sentence revealing something small about the speaker themselves, "
+        "the way people naturally do when describing what they want."
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def generate_narrative_via_llm(trait_profile: dict) -> str:
+def generate_narrative_via_llm(trait_profile: dict, category_ingredients: dict[str, str] | None = None) -> str:
     from app.config import settings
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(model=settings.openai_model, temperature=0.9, api_key=settings.openai_api_key)
-    messages = build_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES)
+    messages = build_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES, category_ingredients)
     return llm.invoke(messages).content.strip()
 
 
-def build_self_narrative_prompt(trait_profile: dict, style_examples: list[str]) -> list[dict]:
+def build_self_narrative_prompt(
+    trait_profile: dict, style_examples: list[str], category_ingredients: dict[str, str] | None = None
+) -> list[dict]:
     """Same trait sampler and style-seeding approach as build_narrative_prompt,
     but framed as the CANDIDATE describing THEMSELVES — used for RAG-matching
     candidate profiles (see generate_candidate_persona), as opposed to
@@ -152,7 +183,7 @@ def build_self_narrative_prompt(trait_profile: dict, style_examples: list[str]) 
     system = (
         "You write short, natural first-person dating-profile bios for a synthetic test "
         "dataset, as if a real person were describing THEMSELVES to a matchmaking app. Write "
-        "ONE paragraph (3-5 sentences), casual and specific, never a list, never clinical or "
+        "ONE paragraph (4-7 sentences), casual and specific, never a list, never clinical or "
         "like a personality-test report — a real person talking about who they are, not a "
         "psychology summary.\n\n"
         "Match the REGISTER of these examples (tone, specificity, imperfection) "
@@ -161,25 +192,33 @@ def build_self_narrative_prompt(trait_profile: dict, style_examples: list[str]) 
     )
     user = (
         "Write a self-description for someone whose own personality would be described this "
-        "way: " + describe_trait_profile(trait_profile) + "\n\n"
+        "way: " + describe_trait_profile(trait_profile, category_ingredients) + "\n\n"
         "Translate those traits into ordinary, concrete language and specific little details "
         "about how THEY live and act — never name a trait directly (no 'high conscientiousness', "
-        "no 'secure attachment'). Write it entirely in first person, about the speaker, not about "
-        "a partner they're looking for."
+        "no 'secure attachment'). Naturally weave in a sense of their lifestyle, physical "
+        "presence, how they show love, a real dealbreaker, and what they value — as part of "
+        "the story, never a checklist. Write it entirely in first person, about the speaker, "
+        "not about a partner they're looking for."
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def generate_self_narrative_via_llm(trait_profile: dict) -> str:
+def generate_self_narrative_via_llm(trait_profile: dict, category_ingredients: dict[str, str] | None = None) -> str:
     from app.config import settings
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(model=settings.openai_model, temperature=0.9, api_key=settings.openai_api_key)
-    messages = build_self_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES)
+    messages = build_self_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES, category_ingredients)
     return llm.invoke(messages).content.strip()
 
 
-def offline_self_narrative(trait_profile: dict) -> str:
+def _ingredients_sentence(category_ingredients: dict[str, str] | None) -> str:
+    if not category_ingredients:
+        return ""
+    return " " + " ".join(f"{label}." for label in category_ingredients.values())
+
+
+def offline_self_narrative(trait_profile: dict, category_ingredients: dict[str, str] | None = None) -> str:
     """No-LLM stand-in for build_self_narrative_prompt's output — same role
     as offline_narrative() for the ideal-partner personas. Keeps the same
     "who's X" construction BIG_FIVE_DESCRIPTIONS was written for (e.g.
@@ -191,10 +230,11 @@ def offline_self_narrative(trait_profile: dict) -> str:
     return (
         "I'm someone who's " + ", who's ".join(phrases) + ". "
         f"In relationships I tend to be {attach}."
+        + _ingredients_sentence(category_ingredients)
     )
 
 
-def offline_narrative(trait_profile: dict) -> str:
+def offline_narrative(trait_profile: dict, category_ingredients: dict[str, str] | None = None) -> str:
     """Deterministic, no-LLM, no-network stand-in narrative — used by tests
     and by generate_persona(use_llm=False) so the rest of the pipeline is
     exercisable without an API key. Clearly templated on purpose: this is a
@@ -207,6 +247,7 @@ def offline_narrative(trait_profile: dict) -> str:
         "I'm looking for someone who is " + ", who is ".join(phrases) + ". "
         f"In relationships I want someone who is {attach}. "
         "As for me, I tend to take a while to open up to someone new."
+        + _ingredients_sentence(category_ingredients)
     )
 
 
@@ -236,7 +277,11 @@ def generate_persona(rng: random.Random, persona_id: str, use_llm: bool = True) 
     from app.chains.extraction_chain import extract_blueprint
 
     trait_profile = sample_trait_profile(rng)
-    narrative = generate_narrative_via_llm(trait_profile) if use_llm else offline_narrative(trait_profile)
+    ingredients = sample_category_ingredients(rng, "IDEAL_PARTNER")
+    narrative = (
+        generate_narrative_via_llm(trait_profile, ingredients) if use_llm
+        else offline_narrative(trait_profile, ingredients)
+    )
     history = [
         {"role": "assistant", "content": OPENING_PROMPT},
         {"role": "user", "content": narrative},
@@ -261,7 +306,11 @@ def generate_candidate_persona(rng: random.Random, candidate_id: str, use_llm: b
     from app.chains.extraction_chain import extract_blueprint
 
     trait_profile = sample_trait_profile(rng)
-    narrative = generate_self_narrative_via_llm(trait_profile) if use_llm else offline_self_narrative(trait_profile)
+    ingredients = sample_category_ingredients(rng, "ME")
+    narrative = (
+        generate_self_narrative_via_llm(trait_profile, ingredients) if use_llm
+        else offline_self_narrative(trait_profile, ingredients)
+    )
     history = [
         {"role": "assistant", "content": OPENING_PROMPT_SELF},
         {"role": "user", "content": narrative},

@@ -153,6 +153,37 @@ size" above), candidate data belongs in the real database, not a repo file,
 since it's live product data for a real feature rather than a test
 artifact.
 
+## Candidate depth fix (2026-09-01)
+
+The first version of `generate_candidate_persona` sampled a trait profile
+covering only Big Five (→ `personality`) and attachment style (→ roughly
+`relationship_dynamic`), then wrote a single 3-5 sentence self-description
+from just that and ran it through extraction once. That narrative
+structurally had nothing to say about `lifestyle`, `physical_type`,
+`love_language`, `dealbreakers`, or `values` — so candidates almost never
+reached the "5 of 7 categories, including personality/lifestyle/
+relationship_dynamic" completeness bar `anaphora_backend/app/readiness.py`
+requires of real users, and `matching_chain.py`'s LLM judge (correctly,
+per its own "don't fabricate a connection" instructions) had little to
+work with.
+
+Fix: `sample_category_ingredients()` draws one concrete detail per
+category the trait sampler doesn't cover, from the same curated
+`CANDIDATE_LABELS` pools `profiles.py`'s baseline generator already uses.
+`describe_trait_profile()`, `build_narrative_prompt()`, and
+`build_self_narrative_prompt()` all weave these in and explicitly instruct
+the model to touch every category (naturally, not as a checklist), so the
+resulting narrative — and therefore extraction — actually has something
+to say about all 7. `test_generate_candidate_pool_reaches_readiness_bar`
+in `test_generation.py` checks this directly against real users' own
+completeness bar (imported from `readiness.py`, not re-defined here).
+
+Existing candidates generated before this fix should be replaced, not kept
+alongside the new ones — run `python ingest_candidates.py --clear -n 50`
+rather than a plain `-n 50` append. Nothing else in the schema references
+`Candidate` rows by id (matches are computed fresh per request, nothing
+persists a link to a specific candidate), so clearing is safe.
+
 ## Known limitations
 
 - **Fully synthetic.** No real user or real dater's data appears anywhere

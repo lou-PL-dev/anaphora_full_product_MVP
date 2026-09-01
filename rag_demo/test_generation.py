@@ -11,9 +11,10 @@ import random
 import pytest
 
 from generate_personas import (
-    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, STYLE_SEED_EXAMPLES,
+    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, NARRATIVE_CATEGORIES, STYLE_SEED_EXAMPLES,
     build_narrative_prompt, describe_trait_profile, extraction_result_to_signals,
-    generate_persona_pool, offline_narrative,
+    generate_candidate_pool, generate_persona_pool, offline_narrative, offline_self_narrative,
+    sample_category_ingredients,
 )
 from profiles import CANDIDATE_LABELS, STRENGTHS
 from trait_distributions import ATTACHMENT_STYLES, BIG_FIVE_TRAITS, TRAIT_LEVELS, sample_trait_profile
@@ -143,6 +144,24 @@ def test_extraction_result_to_signals_shape():
     assert {s.category for s in me} == {"values"}
 
 
+def test_sample_category_ingredients_covers_every_narrative_category():
+    rng = random.Random(3)
+    for perspective in ("ME", "IDEAL_PARTNER"):
+        ingredients = sample_category_ingredients(rng, perspective)
+        assert set(ingredients) == set(NARRATIVE_CATEGORIES)
+        for category, label in ingredients.items():
+            assert label in CANDIDATE_LABELS[(perspective, category)]
+
+
+def test_offline_self_narrative_includes_ingredients():
+    rng = random.Random(7)
+    profile = sample_trait_profile(rng)
+    ingredients = sample_category_ingredients(rng, "ME")
+    narrative = offline_self_narrative(profile, ingredients)
+    for label in ingredients.values():
+        assert label in narrative
+
+
 @pytest.mark.skipif(not _HAS_LLM_CREDENTIALS, reason="needs a real OPENAI_API_KEY to call the LLM + extraction chain")
 def test_generate_persona_pool_end_to_end():
     pool = generate_persona_pool(2, seed=1, use_llm=True)
@@ -152,3 +171,22 @@ def test_generate_persona_pool_end_to_end():
         assert persona.signals
         for sig in persona.signals:
             _assert_valid_signal(sig)
+
+
+@pytest.mark.skipif(not _HAS_LLM_CREDENTIALS, reason="needs a real OPENAI_API_KEY to call the LLM + extraction chain")
+def test_generate_candidate_pool_reaches_readiness_bar():
+    """The whole point of feeding category_ingredients into the narrative
+    prompt: a generated candidate's ME signals should be rich enough to
+    satisfy the SAME completeness bar anaphora_backend/app/readiness.py
+    requires of real users (mandatory categories + at least 5 of 7) — before
+    this fix, candidates only ever had material for personality and
+    relationship_dynamic and essentially never cleared this bar."""
+    from app.readiness import CORE_CATEGORIES, MANDATORY_CATEGORIES, MIN_CATEGORIES_PER_SIDE
+
+    pool = generate_candidate_pool(3, seed=2, use_llm=True)
+    cleared = 0
+    for persona in pool:
+        covered = {s.category for s in persona.signals if s.category in CORE_CATEGORIES}
+        if MANDATORY_CATEGORIES.issubset(covered) and len(covered) >= MIN_CATEGORIES_PER_SIDE:
+            cleared += 1
+    assert cleared >= 2, f"expected most of a 3-candidate pool to clear the readiness bar, only {cleared} did"
