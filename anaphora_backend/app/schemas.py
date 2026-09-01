@@ -50,6 +50,27 @@ class CoverageField(str, Enum):
     me_values = "me_values"
 
 
+class ConversationObservation(BaseModel):
+    """Atomic evidence-first memory extracted from one user turn.
+
+    Observations are the canonical machine-readable layer. Raw user text stays
+    stored verbatim; the polished Blueprint narrative is generated *from*
+    these observations rather than becoming the source of truth itself.
+    """
+    perspective: str = Field(description="ME or IDEAL_PARTNER")
+    category: BaseCategory
+    label: str = Field(description="Short normalized human-readable meaning")
+    strength: Strength = Strength.preference
+    evidence_text: Optional[str] = Field(
+        default=None, description="Short verbatim phrase from the user that supports this observation"
+    )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    explicit: bool = Field(
+        default=True,
+        description="True when directly stated; false when cautiously inferred from a concrete example",
+    )
+
+
 class LongInputChunkDigest(BaseModel):
     """Compact, evidence-preserving understanding of one internal chunk.
 
@@ -68,6 +89,10 @@ class LongInputChunkDigest(BaseModel):
         default_factory=list,
         description="A few short verbatim snippets worth retaining for grounding and conversational tone",
     )
+    observations: list[ConversationObservation] = Field(
+        default_factory=list,
+        description="Atomic structured observations supported by this chunk",
+    )
 
 
 # --- LLM structured-extraction output (Operation B) -------------------------
@@ -78,6 +103,8 @@ class SignalItem(BaseModel):
     evidence_text: Optional[str] = Field(
         default=None, description="Short phrase from the conversation that caused this extraction"
     )
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    explicit: bool = True
 
 
 class PerspectiveBlueprint(BaseModel):
@@ -91,7 +118,7 @@ class PerspectiveBlueprint(BaseModel):
 
 
 class ExtractionResult(BaseModel):
-    """Target schema for the LLM's structured output — see chains/extraction.py"""
+    """Canonical structured Blueprint plus its human-readable projection."""
     ideal_partner: PerspectiveBlueprint
     me: PerspectiveBlueprint
     narrative: str = Field(
@@ -121,15 +148,17 @@ class ConversationMessageResponse(BaseModel):
 
 
 class ConversationTurnResult(BaseModel):
-    """One conversational LLM call returns coverage, steering target, and reply.
+    """One conversational LLM call returns memory, coverage, steering and reply.
 
-    Field order is intentional: the model must first understand the latest
-    message, then recompute cumulative perspective-specific coverage, then
-    choose a genuinely missing target before it writes the natural-language
-    response.
+    Field order is intentional: understand the latest turn first, capture the
+    evidence as atomic observations, then steer the conversation.
     """
     key_points_just_shared: list[str] = Field(
         description="Short phrases capturing what the user's LATEST message actually revealed"
+    )
+    observations: list[ConversationObservation] = Field(
+        default_factory=list,
+        description="Atomic ME/IDEAL_PARTNER observations supported by the latest user turn only",
     )
     coverage_fields: list[CoverageField] = Field(
         description="ALL sufficiently covered ME and IDEAL_PARTNER fields across the WHOLE conversation"
@@ -155,6 +184,7 @@ class BlueprintSignalOut(BaseModel):
     strength: str
     source: str
     evidence_text: Optional[str] = None
+    confidence: Optional[float] = None
 
     class Config:
         from_attributes = True
