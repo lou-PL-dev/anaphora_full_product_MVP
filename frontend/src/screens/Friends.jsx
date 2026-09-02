@@ -6,7 +6,7 @@ export default function Friends({ invites, openFriendReview, openInvite, inviteC
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, lineHeight: 1.2, color: '#2F4A3F' }}>The people who<br />know you best</div>
         <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F', maxWidth: 290, textWrap: 'pretty' }}>What they see shapes who we look for.</div>
       </div>
-      <div style={{ padding: '4px 22px 26px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '24px 22px 26px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {invites.map((inv) => {
           const answered = inv.status === 'answered';
           const statusLabel = !answered ? 'Waiting' : inv.reviewed ? 'Reviewed ✓' : 'Ready to review';
@@ -31,7 +31,7 @@ export default function Friends({ invites, openFriendReview, openInvite, inviteC
           );
         })}
 
-        <div style={{ padding: 20, borderRadius: 20, background: 'linear-gradient(140deg, rgba(166,154,205,.16), #F2EDE6)' }}>
+        <div style={{ padding: 20, borderRadius: 20, background: 'linear-gradient(145deg, #FFFFFF 0%, rgba(166,154,205,.14) 100%)', border: '1px solid rgba(166,154,205,.32)' }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: '#2F4A3F' }}>{invites.length ? 'Invite one more' : 'Invite someone who knows you'}</div>
           <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.6, color: '#2F4A3F' }}>
             {atLimit ? `You've used all ${inviteLimit} invitations on the free plan.` : 'A couple of minutes of their time. Their individual answers stay private, even from you.'}
