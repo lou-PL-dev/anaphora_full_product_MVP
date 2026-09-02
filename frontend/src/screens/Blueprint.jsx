@@ -45,7 +45,7 @@ export default function Blueprint({ goHome, groups, signalCount, narrative, scro
       </div>
 
       <div style={{ flex: 'none', zIndex: 10, padding: '12px 22px 24px', background: 'rgba(255,255,255,.97)', borderTop: '1px solid #DDEAE6', boxShadow: '0 -8px 24px rgba(47,74,63,.06)' }}>
-        <button onClick={goHome} style={{ width: '100%', padding: '15px 22px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Looks good, continue →</button>
+        <button onClick={goHome} style={{ width: '100%', padding: '15px 22px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Looks good! Explore Anaphora →</button>
       </div>
     </div>
   );
