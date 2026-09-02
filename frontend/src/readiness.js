@@ -1,7 +1,7 @@
 // Offline/demo fallback only. The live backend remains the source of truth.
-// Keep this logic aligned with anaphora_backend/app/readiness.py so the UI
-// never invents a higher readiness score when the backend is unavailable or
-// when a legitimate 0% value is temporarily being rendered.
+// App.jsx currently only carries the legacy meeting-preference state, so this
+// fallback deliberately awards at most that 10% half of Introduction
+// essentials. It must never invent the missing Your essentials half offline.
 
 const CORE_CATEGORIES = new Set([
   'personality',
@@ -36,19 +36,20 @@ function profileReady(covered) {
   );
 }
 
-export function mockReadiness(signals, discoveryDone, gender) {
+export function mockReadiness(signals, discoveryDone, meetingPreference) {
   const meCovered = coveredCategories(signals, 'ME');
   const idealPartnerCovered = coveredCategories(signals, 'IDEAL_PARTNER');
 
   const met = {
-    basic_matching_preferences: !!gender,
+    introduction_essentials: false,
+    meeting_preferences: !!meetingPreference,
     discovery_completed: !!discoveryDone,
     me_profile: profileReady(meCovered),
     ideal_partner_profile: profileReady(idealPartnerCovered),
   };
 
   const total =
-    (met.basic_matching_preferences ? 20 : 0)
+    (met.meeting_preferences ? 10 : 0)
     + (met.discovery_completed ? 20 : 0)
     + (met.me_profile ? 30 : 0)
     + (met.ideal_partner_profile ? 30 : 0);
