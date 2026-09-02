@@ -5,7 +5,7 @@ directly, so the schema is traceable back to the spec.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Boolean
+from sqlalchemy import Column, String, Integer, Float, DateTime, Date, ForeignKey, JSON, Text, Boolean
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -29,6 +29,8 @@ class User(Base):
     location = Column(String, nullable=True)
     gender = Column(String, nullable=True)
     gender_preference = Column(String, nullable=True)
+    birth_date = Column(Date, nullable=True)
+    # Cached derived age used by matching. birth_date is the source of truth.
     age = Column(Integer, nullable=True)
     preferred_age_range = Column(String, nullable=True)  # e.g. "30-40"
     blueprint_narrative = Column(Text, nullable=True)
