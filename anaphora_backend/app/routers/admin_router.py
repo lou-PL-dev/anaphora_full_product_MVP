@@ -1,8 +1,8 @@
 """Tiny private research API for the MVP tester round.
 
 Normal product events are written with the anonymous per-device user id.
-Admin reads require one shared secret supplied through X-Admin-Secret and
-configured as ADMIN_SECRET on the backend deployment.
+Admin reads and destructive reset actions require one shared secret supplied
+through X-Admin-Secret and configured as ADMIN_SECRET on the backend.
 """
 from __future__ import annotations
 
@@ -17,7 +17,16 @@ from sqlalchemy.orm import Session
 from ..auth import get_current_user
 from ..config import settings
 from ..database import get_db
-from ..models import BlueprintSignal, Conversation, DiscoveryResponse, TesterEvent, User
+from ..models import (
+    BlueprintSignal,
+    Conversation,
+    DiscoveryResponse,
+    FriendInvite,
+    FriendResponse,
+    FriendSignal,
+    TesterEvent,
+    User,
+)
 from ..readiness import compute_readiness
 
 router = APIRouter(tags=["tester-research"])
@@ -89,6 +98,35 @@ def list_test_sessions(
 
     rows.sort(key=lambda row: row["last_activity"] or "", reverse=True)
     return {"sessions": rows}
+
+
+@router.delete("/admin/test-sessions")
+def clear_test_sessions(
+    _admin: None = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """Clear tester-generated data while preserving candidates/discoveries.
+
+    Delete in dependency order because the MVP schema intentionally keeps
+    foreign keys simple and does not rely on DB-level cascade deletes.
+    """
+    try:
+        friend_response_ids = [row[0] for row in db.query(FriendResponse.id).all()]
+        if friend_response_ids:
+            db.query(FriendSignal).filter(FriendSignal.response_id.in_(friend_response_ids)).delete(synchronize_session=False)
+        db.query(FriendResponse).delete(synchronize_session=False)
+        db.query(FriendInvite).delete(synchronize_session=False)
+        db.query(TesterEvent).delete(synchronize_session=False)
+        db.query(DiscoveryResponse).delete(synchronize_session=False)
+        db.query(BlueprintSignal).delete(synchronize_session=False)
+        db.query(Conversation).delete(synchronize_session=False)
+        deleted_users = db.query(User).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"cleared": True, "deleted_users": deleted_users}
 
 
 @router.get("/admin/test-sessions/{user_id}")
