@@ -5,16 +5,9 @@ Iteration 4 evaluates both directions:
   MY IDEAL_PARTNER -> CANDIDATE ME
   MY ME -> CANDIDATE IDEAL_PARTNER
 
-This module owns eligibility, broad retrieval on the user's IDEAL_PARTNER,
-and reciprocal semantic reranking down to a handful of finalists. The final
-grounded judgment that turns finalists into a surfaced introduction lives in
-matching_chain_v5.py (via relationship_reasoning_chain) — see that module
-for the live orchestration. judge_and_explain_candidates() below is the
-original Iteration 4 judgment step, kept and tested as a standalone scorer.
-
-The two directional scores remain visible to the internal ranking logic rather
-than being flattened into a naive average. A candidate who fits the user very
-well but wants someone quite different is deliberately penalized.
+This module owns deterministic eligibility, broad retrieval on the user's
+IDEAL_PARTNER, and reciprocal semantic reranking down to a handful of
+finalists. The final grounded judgment lives in matching_chain_v5.py.
 """
 from __future__ import annotations
 
@@ -141,16 +134,66 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return max(-1.0, min(1.0, dot / (norm_a * norm_b)))
 
 
-def _normalise_gender_preference(value: str | None) -> str | None:
+def _normalise_gender(value: str | None) -> str | None:
+    """Map UI/storage labels to the candidate-pool eligibility vocabulary."""
     if not value:
         return None
     value = value.strip().lower()
+    if value.startswith("other:"):
+        return "other"
     aliases = {
         "man": "male", "men": "male", "male": "male",
         "woman": "female", "women": "female", "female": "female",
         "non-binary": "nonbinary", "nonbinary": "nonbinary", "non binary": "nonbinary",
+        "other": "other",
+        "everyone": "everyone", "all": "everyone", "any": "everyone",
     }
     return aliases.get(value, value)
+
+
+def _normalise_gender_preferences(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    result = {_normalise_gender(token) for token in value.split(",") if token.strip()}
+    return {item for item in result if item}
+
+
+def _candidate_demographic_preferences(candidate: Candidate) -> dict | None:
+    for raw in candidate.signals or []:
+        if isinstance(raw, dict) and raw.get("kind") == "demographic_preferences":
+            return raw
+    return None
+
+
+def candidate_accepts_user(candidate: Candidate, user_gender: str | None, user_age: int | None) -> bool:
+    """Deterministic reverse demographic eligibility.
+
+    Existing seeded candidates predate demographic-preference metadata. They
+    remain eligible (unknown rather than false) until the pool is reseeded.
+    """
+    metadata = _candidate_demographic_preferences(candidate)
+    if not metadata:
+        return True
+
+    normalized_user_gender = _normalise_gender(user_gender)
+    wanted = {
+        _normalise_gender(str(value))
+        for value in (metadata.get("gender_preferences") or [])
+        if value
+    }
+    wanted.discard(None)
+    if normalized_user_gender and wanted and "everyone" not in wanted:
+        if normalized_user_gender not in wanted:
+            return False
+
+    age_min = metadata.get("age_min")
+    age_max = metadata.get("age_max")
+    if user_age is not None:
+        if age_min is not None and user_age < int(age_min):
+            return False
+        if age_max is not None and user_age > int(age_max):
+            return False
+    return True
 
 
 def retrieve_candidates(
@@ -162,9 +205,12 @@ def retrieve_candidates(
     age_max: int | None = None,
 ) -> list[tuple[Candidate, float]]:
     query = db.query(Candidate, Candidate.embedding.cosine_distance(query_embedding).label("distance"))
-    gender = _normalise_gender_preference(gender_preference)
-    if gender and gender not in {"any", "all", "everyone"}:
-        query = query.filter(Candidate.gender == gender)
+    genders = _normalise_gender_preferences(gender_preference)
+    if genders and "everyone" not in genders:
+        # The current synthetic pool contains male/female/nonbinary profiles.
+        # An explicit `other` preference is preserved but cannot retrieve a
+        # category that does not yet exist in that pool.
+        query = query.filter(Candidate.gender.in_(sorted(genders)))
     if age_min is not None:
         query = query.filter(Candidate.age >= age_min)
     if age_max is not None:
@@ -217,7 +263,9 @@ def _group_by_category(signals: list) -> dict[str, list]:
 def _candidate_signals(candidate: Candidate, perspective: str) -> list[dict]:
     result = []
     for raw in candidate.signals or []:
-        raw_perspective = raw.get("perspective", "ME")
+        if not isinstance(raw, dict) or raw.get("kind") == "demographic_preferences":
+            continue
+        raw_perspective = raw.get("perspective")
         if raw_perspective == perspective:
             result.append(raw)
     return result
@@ -277,12 +325,7 @@ def _directional_score(
 
 
 def _reciprocal_score(forward: float, reverse: float | None, broad_similarity: float) -> float:
-    """Combine directions without hiding asymmetry behind a simple average.
-
-    The weaker direction matters substantially. A high forward score cannot
-    compensate for a poor reverse score. Legacy candidates without an
-    IDEAL_PARTNER profile remain explorable but receive a confidence penalty.
-    """
+    """Combine directions without hiding asymmetry behind a simple average."""
     if reverse is None:
         return (0.90 * forward + 0.10 * broad_similarity) * LEGACY_RECIPROCITY_PENALTY
     weaker = min(forward, reverse)
