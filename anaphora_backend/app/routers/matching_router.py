@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..chains.matching_chain import find_matches
+from ..chains.matching_chain_v5 import find_matches
 from ..database import engine, get_db
 from ..models import BlueprintSignal, User
 from ..readiness import compute_readiness
