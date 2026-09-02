@@ -1,5 +1,65 @@
+import { useEffect, useState } from 'react';
+import { apiCall, getOrCreateUserId } from '../api';
+
 export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions, nextDiscovery, startDiscovery }) {
-  const arcOffset = 427 - 427 * (readiness / 100);
+  const [liveReadiness, setLiveReadiness] = useState(null);
+  const [liveBreakdown, setLiveBreakdown] = useState(null);
+
+  useEffect(() => {
+    const uid = getOrCreateUserId();
+    let cancelled = false;
+    apiCall(uid, 'GET', '/readiness').then((r) => {
+      if (!cancelled && r) {
+        setLiveReadiness(r.readiness_pct);
+        setLiveBreakdown(r.breakdown || {});
+      }
+    });
+    const onReadiness = (event) => {
+      const detail = event.detail || {};
+      if (detail.readiness != null) setLiveReadiness(detail.readiness);
+      if (detail.breakdown) setLiveBreakdown(detail.breakdown);
+    };
+    window.addEventListener('anaphora:readiness-updated', onReadiness);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('anaphora:readiness-updated', onReadiness);
+    };
+  }, []);
+
+  const shownReadiness = liveReadiness ?? readiness;
+  const arcOffset = 427 - 427 * (shownReadiness / 100);
+  const intro = liveBreakdown?.introduction_essentials;
+  const introEarned = intro?.earned || 0;
+  const introDone = !!intro?.met;
+
+  const shownSteps = steps.map((st) => {
+    if (st.key !== 'prefs') return st;
+    if (!liveBreakdown) {
+      return { ...st, title: 'Introduction essentials', note: st.done ? 'Your essentials and preferences are set' : 'Your essentials and who you’d like to meet' };
+    }
+    const partial = introEarned > 0 && !introDone;
+    return {
+      ...st,
+      title: 'Introduction essentials',
+      note: introDone ? 'Your essentials and preferences are set' : (partial ? `${introEarned} / 20% complete` : 'Your essentials and who you’d like to meet'),
+      done: introDone,
+      cta: introDone ? 'Edit' : (partial ? 'Complete' : 'Set'),
+      mark: introDone ? '✓' : '',
+      ring: introDone || partial ? '#2F4A3F' : '#DDEAE6',
+      fill: introDone ? '#2F4A3F' : 'transparent',
+    };
+  });
+
+  const liveCopy = shownReadiness >= 90
+    ? ['Ready when you are', 'We know enough to look for people who actually fit.']
+    : shownReadiness >= 60
+      ? ['Coming into focus', 'A little more and intros start making real sense.']
+      : shownReadiness > 0
+        ? ['A good beginning', 'Every answer sharpens who we look for.']
+        : ['Nothing yet', 'One conversation is all it takes to start.'];
+  const shownHeadline = liveReadiness == null ? readinessHeadline : liveCopy[0];
+  const shownSub = liveReadiness == null ? readinessSub : liveCopy[1];
+
   const refinementByKey = Object.fromEntries((refinementActions || []).map((action) => [action.key, action]));
   const conversationAction = refinementByKey.talk;
   const friendAction = refinementByKey.friend;
@@ -26,13 +86,13 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
                 <circle cx="80" cy="80" r="68" fill="none" stroke="#A69ACD" strokeWidth="9" strokeLinecap="round" strokeDasharray="427" strokeDashoffset={arcOffset} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)' }} />
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{readiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{shownReadiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
                 <div style={{ marginTop: 4, fontSize: 9.5, letterSpacing: '.14em', color: '#A69ACD' }}>READINESS</div>
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{readinessHeadline}</div>
-              <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#2F4A3F', textWrap: 'pretty' }}>{readinessSub}</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{shownHeadline}</div>
+              <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#2F4A3F', textWrap: 'pretty' }}>{shownSub}</div>
             </div>
           </div>
         )}
@@ -108,7 +168,7 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
             <div>
               <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F', paddingBottom: 6 }}>WHAT WOULD HELP MOST</div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {steps.map((st) => (
+                {shownSteps.map((st) => (
                   <button key={st.key} onClick={st.onGo} style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 13, padding: '15px 4px', border: 'none', borderBottom: '1px solid #DDEAE6', background: 'transparent', cursor: 'pointer' }}>
                     <span style={{ flex: 'none', width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${st.ring}`, background: st.fill, display: 'grid', placeItems: 'center', color: '#FFFFFF', fontSize: 11 }}>{st.mark}</span>
                     <span style={{ flex: 1 }}>
