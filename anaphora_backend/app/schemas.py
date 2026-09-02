@@ -28,12 +28,6 @@ class BaseCategory(str, Enum):
 
 
 class CoverageField(str, Enum):
-    """Conversation coverage is perspective-specific.
-
-    A flat category list cannot distinguish learning that the ideal partner
-    is adventurous from learning that the user is adventurous. These explicit
-    fields make the steering model keep filling both sides of the Blueprint.
-    """
     ideal_partner_personality = "ideal_partner_personality"
     ideal_partner_lifestyle = "ideal_partner_lifestyle"
     ideal_partner_physical_type = "ideal_partner_physical_type"
@@ -51,58 +45,26 @@ class CoverageField(str, Enum):
 
 
 class ConversationObservation(BaseModel):
-    """Atomic evidence-first memory extracted from one user turn.
-
-    Observations are the canonical machine-readable layer. Raw user text stays
-    stored verbatim; the polished Blueprint narrative is generated *from*
-    these observations rather than becoming the source of truth itself.
-    """
     perspective: str = Field(description="ME or IDEAL_PARTNER")
     category: BaseCategory
     label: str = Field(description="Short normalized human-readable meaning")
     strength: Strength = Strength.preference
-    evidence_text: Optional[str] = Field(
-        default=None, description="Short verbatim phrase from the user that supports this observation"
-    )
+    evidence_text: Optional[str] = Field(default=None)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    explicit: bool = Field(
-        default=True,
-        description="True when directly stated; false when cautiously inferred from a concrete example",
-    )
+    explicit: bool = True
 
 
 class LongInputChunkDigest(BaseModel):
-    """Compact, evidence-preserving understanding of one internal chunk.
+    key_points: list[str] = Field(default_factory=list)
+    coverage_fields: list[CoverageField] = Field(default_factory=list)
+    evidence_snippets: list[str] = Field(default_factory=list)
+    observations: list[ConversationObservation] = Field(default_factory=list)
 
-    This is processing memory only: the original user message remains stored
-    verbatim and still counts as one conversation turn.
-    """
-    key_points: list[str] = Field(
-        default_factory=list,
-        description="Specific factual points from this chunk, preserving nuance and contradictions",
-    )
-    coverage_fields: list[CoverageField] = Field(
-        default_factory=list,
-        description="Perspective-specific Blueprint fields genuinely supported by this chunk",
-    )
-    evidence_snippets: list[str] = Field(
-        default_factory=list,
-        description="A few short verbatim snippets worth retaining for grounding and conversational tone",
-    )
-    observations: list[ConversationObservation] = Field(
-        default_factory=list,
-        description="Atomic structured observations supported by this chunk",
-    )
-
-
-# --- LLM structured-extraction output (Operation B) -------------------------
 
 class SignalItem(BaseModel):
-    label: str = Field(description="Short human-readable label, e.g. 'Warm', 'Self-deprecating humour'")
+    label: str
     strength: Strength = Strength.preference
-    evidence_text: Optional[str] = Field(
-        default=None, description="Short phrase from the conversation that caused this extraction"
-    )
+    evidence_text: Optional[str] = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     explicit: bool = True
 
@@ -118,17 +80,10 @@ class PerspectiveBlueprint(BaseModel):
 
 
 class ExtractionResult(BaseModel):
-    """Canonical structured Blueprint plus its human-readable projection."""
     ideal_partner: PerspectiveBlueprint
     me: PerspectiveBlueprint
-    narrative: str = Field(
-        description="A flowing, human-readable portrait of the ideal partner — "
-        "written the way a perceptive friend would describe someone, in the "
-        "same language the user spoke in — not a bullet list."
-    )
+    narrative: str
 
-
-# --- API request/response shapes --------------------------------------------
 
 class ConversationStartResponse(BaseModel):
     conversation_id: str
@@ -148,28 +103,11 @@ class ConversationMessageResponse(BaseModel):
 
 
 class ConversationTurnResult(BaseModel):
-    """One conversational LLM call returns memory, coverage, steering and reply.
-
-    Field order is intentional: understand the latest turn first, capture the
-    evidence as atomic observations, then steer the conversation.
-    """
-    key_points_just_shared: list[str] = Field(
-        description="Short phrases capturing what the user's LATEST message actually revealed"
-    )
-    observations: list[ConversationObservation] = Field(
-        default_factory=list,
-        description="Atomic ME/IDEAL_PARTNER observations supported by the latest user turn only",
-    )
-    coverage_fields: list[CoverageField] = Field(
-        description="ALL sufficiently covered ME and IDEAL_PARTNER fields across the WHOLE conversation"
-    )
-    next_question_target: Optional[CoverageField] = Field(
-        default=None,
-        description="One still-missing field the next question should explore. Null only when both perspectives have enough coverage to complete.",
-    )
-    reply: str = Field(
-        description="Briefly mirror the latest specifics, then ask exactly one natural question aimed at next_question_target"
-    )
+    key_points_just_shared: list[str]
+    observations: list[ConversationObservation] = Field(default_factory=list)
+    coverage_fields: list[CoverageField]
+    next_question_target: Optional[CoverageField] = None
+    reply: str
 
 
 class ConversationCompleteRequest(BaseModel):
@@ -224,26 +162,23 @@ class CandidateOut(BaseModel):
 
 
 class FitLevel(str, Enum):
-    """PRD section 26 (Match Presentation): qualitative fit only."""
     strong_fit = "strong_fit"
     worth_exploring = "worth_exploring"
 
 
 class MatchSection(BaseModel):
     heading: str
-    body: str = Field(description="One or two sentences, grounded ONLY in the information given — never invented")
+    body: str = Field(description="One or two sentences, grounded ONLY in the supplied relationship evidence")
 
 
 class MatchOut(BaseModel):
     candidate: CandidateOut
     fit: FitLevel
-    sections: list[MatchSection] = Field(
-        description="1-4 themed paragraphs explaining the match — never empty"
-    )
+    sections: list[MatchSection]
 
 
 class MatchListResponse(BaseModel):
-    ready: bool = Field(description="Whether readiness_pct has reached 100")
+    ready: bool
     readiness_pct: int
     matches: list[MatchOut]
 
@@ -251,7 +186,11 @@ class MatchListResponse(BaseModel):
 class MatchExplanation(BaseModel):
     candidate_id: str
     has_genuine_match: bool = Field(
-        description="False when there is nothing specific and genuinely grounded to say about this candidate"
+        description="False when the relationship-level evidence does not justify an introduction"
+    )
+    recommended_fit: Optional[FitLevel] = Field(
+        default=None,
+        description="Qualitative relationship verdict. Null whenever has_genuine_match is false.",
     )
     sections: list[MatchSection] = Field(default_factory=list)
 
