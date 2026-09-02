@@ -90,7 +90,6 @@ def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
     name_pools = {g: list(names) for g, names in FIRST_NAMES.items()}
     for pool in name_pools.values():
         rng.shuffle(pool)
-    photo_pools = {g: list(files) for g, files in PHOTO_FILES.items()}
 
     demographics = []
     name_idx = {g: 0 for g in name_pools}
@@ -98,7 +97,11 @@ def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
         pool = name_pools[gender]
         name = pool[name_idx[gender] % len(pool)]
         name_idx[gender] += 1
-        photo_url = photo_pools[gender].pop(0) if photo_pools[gender] else None
+        # Only 2-4 photos exist per gender for this testing-only pool, so
+        # candidates necessarily share photos — pick uniformly at random
+        # rather than handing out each photo once and leaving the rest of
+        # the pool with none at all.
+        photo_url = rng.choice(PHOTO_FILES[gender]) if PHOTO_FILES.get(gender) else None
         age = rng.randint(24, 42)
         demographics.append({
             "gender": gender,
