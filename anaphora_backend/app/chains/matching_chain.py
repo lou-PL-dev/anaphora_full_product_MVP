@@ -278,6 +278,7 @@ def _directional_score(
 ) -> tuple[float, list[str]]:
     desired_by_category = _group_by_category(desired_signals)
     actual_by_category = _group_by_category(actual_signals)
+    all_actual = [signal for group in actual_by_category.values() for signal in group]
     weighted_total = 0.0
     weight_total = 0.0
     category_scores: list[float] = []
@@ -285,20 +286,25 @@ def _directional_score(
 
     for category, desired_group in desired_by_category.items():
         actual_group = actual_by_category.get(category, [])
-        if not actual_group:
-            for desired in desired_group:
-                weight_total += _signal_weight(desired)
-            continue
-
-        desired_category_text = " ; ".join(_signal_text(s) for s in desired_group)
-        actual_category_text = " ; ".join(_signal_text(s) for s in actual_group)
-        category_scores.append(max(0.0, _cosine(vector(desired_category_text), vector(actual_category_text))))
+        if actual_group:
+            desired_category_text = " ; ".join(_signal_text(s) for s in desired_group)
+            actual_category_text = " ; ".join(_signal_text(s) for s in actual_group)
+            category_scores.append(max(0.0, _cosine(vector(desired_category_text), vector(actual_category_text))))
 
         for desired in desired_group:
             desired_label = desired.get("label", "") if isinstance(desired, dict) else desired.label or ""
             best = None
             best_similarity = -1.0
-            for actual in actual_group:
+            # Search every actual signal, not just this category's — real
+            # conversational extraction and the synthetic candidate generator
+            # don't always file the same concept under the same category
+            # (e.g. "adventurous" as personality for one persona, an
+            # "Adventure" lifestyle lean for a real user), so restricting to
+            # same-category comparison silently missed genuine overlap. This
+            # also means a category the other side never touched no longer
+            # scores as a flat mismatch — it's simply absent evidence, and
+            # gets whatever real similarity the rest of their profile offers.
+            for actual in all_actual:
                 actual_label = actual.get("label", "") if isinstance(actual, dict) else actual.label or ""
                 if _has_negation(desired_label) != _has_negation(actual_label):
                     continue

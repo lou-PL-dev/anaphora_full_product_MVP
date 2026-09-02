@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.chains.matching_chain import (
     FINALIST_SIZE,
+    _directional_score,
     judge_and_explain_candidates,
     semantic_rerank_candidates,
     shared_signals,
@@ -125,6 +126,51 @@ def test_semantic_reranker_caps_finalists():
     with patch("app.llm.OpenAIEmbeddings", return_value=mock_embedder):
         result = semantic_rerank_candidates(candidates, user_signals)
     assert len(result) == FINALIST_SIZE
+
+
+def test_directional_score_finds_cross_category_evidence():
+    """A trait can land under a different Blueprint category on each side —
+    e.g. "adventurous" filed as personality by the candidate generator vs. an
+    "Adventure" lifestyle lean picked up from a real conversation. Restricting
+    comparison to same-category signals silently missed this kind of overlap."""
+    desired = [{"category": "personality", "label": "adventurous", "evidence_text": "always game for an adventure", "strength": "strong_preference"}]
+    actual = [{"category": "lifestyle", "label": "Adventure", "evidence_text": "Leans toward: Adventure", "strength": "preference"}]
+
+    def vector(text):
+        return [1.0, 0.0] if "adventur" in text.lower() else [0.0, 1.0]
+
+    score, evidence = _directional_score(desired, actual, vector)
+    assert score > 0.7
+    assert len(evidence) == 1
+
+
+def test_directional_score_missing_category_is_not_a_flat_mismatch():
+    """A category the other side never touched is absent evidence, not proof
+    of incompatibility — it must not drag the score down as if it conflicted,
+    and real evidence for it elsewhere (under a different category) should
+    still be found."""
+    desired = [
+        {"category": "personality", "label": "calm", "evidence_text": "very calm", "strength": "hard_requirement"},
+        {"category": "love_language", "label": "quality time", "evidence_text": "quality time together", "strength": "strong_preference"},
+    ]
+    actual = [
+        {"category": "personality", "label": "calm", "evidence_text": "very calm", "strength": "strong_preference"},
+        # Same idea as the desired "quality time" want, filed under a
+        # different category — nothing under "love_language" at all.
+        {"category": "relationship_dynamic", "label": "quality time together", "evidence_text": "quality time together", "strength": "preference"},
+    ]
+
+    def vector(text):
+        low = text.lower()
+        if "calm" in low:
+            return [1.0, 0.0, 0.0]
+        if "quality time" in low:
+            return [0.0, 1.0, 0.0]
+        return [0.0, 0.0, 1.0]
+
+    score, evidence = _directional_score(desired, actual, vector)
+    assert len(evidence) == 2
+    assert score > 0.9
 
 
 def test_judge_and_explain_empty_candidates_short_circuits():
