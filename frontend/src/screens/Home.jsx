@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiCall, getOrCreateUserId } from '../api';
 
-export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions, nextDiscovery, startDiscovery }) {
+export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, goIntro, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions, nextDiscovery, startDiscovery }) {
   const [liveReadiness, setLiveReadiness] = useState(null);
   const [liveBreakdown, setLiveBreakdown] = useState(null);
 
@@ -86,22 +86,27 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
             <div style={{ marginTop: 7, fontSize: 13, lineHeight: 1.5, color: '#2F4A3F' }}>There’s always more to discover.</div>
           </div>
         ) : (
-          <div style={{ position: 'relative', marginTop: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
-            <div style={{ flex: 'none', position: 'relative', width: 152, height: 152 }}>
-              <svg viewBox="0 0 160 160" style={{ width: 152, height: 152, transform: 'rotate(-90deg)' }}>
-                <circle cx="80" cy="80" r="68" fill="none" stroke="#DDEAE6" strokeWidth="9" />
-                <circle cx="80" cy="80" r="68" fill="none" stroke="#A69ACD" strokeWidth="9" strokeLinecap="round" strokeDasharray="427" strokeDashoffset={arcOffset} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)' }} />
-              </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{shownReadiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
-                <div style={{ marginTop: 4, fontSize: 9.5, letterSpacing: '.14em', color: '#A69ACD' }}>READINESS</div>
+          <>
+            <div style={{ position: 'relative', marginTop: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ flex: 'none', position: 'relative', width: 152, height: 152 }}>
+                <svg viewBox="0 0 160 160" style={{ width: 152, height: 152, transform: 'rotate(-90deg)' }}>
+                  <circle cx="80" cy="80" r="68" fill="none" stroke="#DDEAE6" strokeWidth="9" />
+                  <circle cx="80" cy="80" r="68" fill="none" stroke="#A69ACD" strokeWidth="9" strokeLinecap="round" strokeDasharray="427" strokeDashoffset={arcOffset} style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)' }} />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 44, lineHeight: 1, color: '#2F4A3F' }}>{shownReadiness}<span style={{ fontSize: 20, color: '#A69ACD' }}>%</span></div>
+                  <div style={{ marginTop: 4, fontSize: 9.5, letterSpacing: '.14em', color: '#A69ACD' }}>READINESS</div>
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{shownHeadline}</div>
+                <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#2F4A3F', textWrap: 'pretty' }}>{shownSub}</div>
               </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, lineHeight: 1.3, color: '#2F4A3F' }}>{shownHeadline}</div>
-              <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.55, color: '#2F4A3F', textWrap: 'pretty' }}>{shownSub}</div>
-            </div>
-          </div>
+            {shownReadiness >= 100 && (
+              <button onClick={goIntro} style={{ position: 'relative', width: '100%', marginTop: 18, padding: '15px 20px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#FFFFFF', fontSize: 14, fontWeight: 500, letterSpacing: '.01em', cursor: 'pointer', boxShadow: '0 9px 24px rgba(47,74,63,.20)' }}>See who Anaphora found →</button>
+            )}
+          </>
         )}
       </div>
 
