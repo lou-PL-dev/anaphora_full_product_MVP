@@ -2,12 +2,23 @@ import { useRef } from 'react';
 import { useSpeechToText } from '../useSpeechToText';
 import ErrorBanner from '../components/ErrorBanner';
 
+const MIN_FIRST_CONVERSATION_TURNS_BEFORE_SAVE = 4;
+
 export default function Chat({ goHome, messages, thinking, draft, onDraft, onDraftKey, sendMessage, turnCount, readyToComplete, isFollowUp, completeConversation, chatEndRef, setDraft, error, onRetryStart }) {
   const baseDraftRef = useRef('');
   const { listening, supported: voiceSupported, toggle: toggleVoice, stop: stopVoice } = useSpeechToText({ onTranscript: (transcript) => { const base = baseDraftRef.current; setDraft(base ? base + ' ' + transcript : transcript); } });
   const handleMicClick = () => { if (!listening) baseDraftRef.current = draft.trim(); toggleVoice(); };
   const handleSend = () => { if (listening) stopVoice(); sendMessage(); };
   const handleDraftKey = (e) => { if (e.key === 'Enter' && !e.shiftKey && listening) stopVoice(); onDraftKey(e); };
+
+  // On the very first conversation, don't invite the user to create a
+  // Blueprint after a single answer. Four user turns mirrors the backend's
+  // minimum conversation run, while readyToComplete still allows the CTA as
+  // soon as the backend says the profile is genuinely complete. Follow-up
+  // conversations keep the lightweight "save what I added" behaviour.
+  const canOfferSave = isFollowUp
+    ? turnCount > 0
+    : readyToComplete || turnCount >= MIN_FIRST_CONVERSATION_TURNS_BEFORE_SAVE;
 
   return (
     <div className="ap-screen" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#FFFFFF' }}>
@@ -20,14 +31,14 @@ export default function Chat({ goHome, messages, thinking, draft, onDraft, onDra
         {thinking && <div style={{ display: 'flex', gap: 10, alignItems: 'center', animation: 'apFade .3s ease both' }}><div style={{ flex: 'none', width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(140deg, #A69ACD, #DDEAE6)' }} /><div style={{ padding: '14px 18px', borderRadius: '5px 20px 20px 20px', background: '#FFFFFF', border: '1px solid #DDEAE6', color: '#A69ACD', fontSize: 12 }}>Thinking…</div></div>}
         <div ref={chatEndRef} />
       </div>
-      {turnCount > 0 && !thinking && (
+      {canOfferSave && !thinking && (
         <div style={{ padding: '0 20px 10px' }}>
           <button onClick={completeConversation} style={{ width: '100%', padding: 15, border: 'none', borderRadius: 999, background: '#A69ACD', color: '#FFFFFF', fontSize: 14, fontWeight: 500, cursor: 'pointer', boxShadow: '0 8px 22px rgba(166,154,205,.28)', animation: 'apRise .5s ease both' }}>
             {isFollowUp ? 'Add to my Blueprint' : 'Create my Blueprint'}
           </button>
           {!readyToComplete && (
             <div style={{ marginTop: 8, textAlign: 'center', fontSize: 11.5, color: '#A69ACD' }}>
-              You can save what you've shared any time — keep going for a fuller picture, or save now.
+              You can save what you've shared now — or keep going for a fuller picture.
             </div>
           )}
         </div>
