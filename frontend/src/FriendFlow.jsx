@@ -14,7 +14,6 @@ import { apiCallPublic, TIMEOUT_QUICK, TIMEOUT_INSIGHT } from './api';
 export default function FriendFlow({ token }) {
   const [step, setStep] = useState('loading'); // loading | error | landing | questions | review | done
   const [errorMessage, setErrorMessage] = useState('');
-  const [inviterName, setInviterName] = useState('');
   const [questions, setQuestions] = useState([]);
   const [friendName, setFriendName] = useState('');
   const [dqIdx, setDqIdx] = useState(0);
@@ -31,7 +30,6 @@ export default function FriendFlow({ token }) {
       if (r.status === 410) { setErrorMessage("This invite link has already been used — it only works once."); setStep('error'); return; }
       if (r.status === 404) { setErrorMessage("We couldn't find this invite link."); setStep('error'); return; }
       if (!r.ok || !r.data) { setErrorMessage("We couldn't reach Anaphora. Check your connection and try opening the link again."); setStep('error'); return; }
-      setInviterName(r.data.inviter_name);
       setQuestions(r.data.questions);
       setStep('landing');
     })();
@@ -101,14 +99,14 @@ export default function FriendFlow({ token }) {
   let screenEl = null;
   if (step === 'loading') screenEl = null;
   else if (step === 'error') screenEl = <FriendError message={errorMessage} />;
-  else if (step === 'landing') screenEl = <FriendLanding inviterName={inviterName} friendName={friendName} onFriendName={onFriendNameChange} onContinue={beginQuestions} canContinue={!!friendName.trim()} />;
+  else if (step === 'landing') screenEl = <FriendLanding friendName={friendName} onFriendName={onFriendNameChange} onContinue={beginQuestions} canContinue={!!friendName.trim()} />;
   else if (step === 'questions') screenEl = (
     <Discovery
       discoveryUnavailable={false}
       discoveryBack={discoveryBack}
       discoveryProgress={questions.length ? Math.round(((dqIdx + (answered ? 1 : 0)) / questions.length) * 100) + '%' : '0%'}
       discoveryCounter={questions.length ? (dqIdx + 1) + '/' + questions.length : ''}
-      discoveryTitle={`For ${inviterName}`}
+      discoveryTitle="ABOUT THEM"
       dqPrompt={q.prompt}
       dqIsChoice={!isText}
       dqOptions={dqOptions}
@@ -129,8 +127,8 @@ export default function FriendFlow({ token }) {
       error={null}
     />
   );
-  else if (step === 'review') screenEl = <FriendAnswerReview inviterName={inviterName} questions={questions} answers={answersByQuestion} onEditQuestion={onEditQuestion} onSubmit={submit} submitting={submitting} error={submitError} />;
-  else if (step === 'done') screenEl = <FriendDone inviterName={inviterName} />;
+  else if (step === 'review') screenEl = <FriendAnswerReview questions={questions} answers={answersByQuestion} onEditQuestion={onEditQuestion} onSubmit={submit} submitting={submitting} error={submitError} />;
+  else if (step === 'done') screenEl = <FriendDone />;
 
   return <FriendShell>{screenEl}</FriendShell>;
 }

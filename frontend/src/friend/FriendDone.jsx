@@ -1,6 +1,6 @@
 // Reuses Enough.jsx's dark hero pattern (same background, decorative
 // paths, typography, animation) for the friend's closing screen.
-export default function FriendDone({ inviterName }) {
+export default function FriendDone() {
   const goApp = () => { window.location.href = window.location.origin; };
   return (
     <div className="ap-screen" style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '42px 32px', background: '#2F4A3F' }}>
@@ -17,10 +17,10 @@ export default function FriendDone({ inviterName }) {
           <div style={{ fontSize: 10.5, letterSpacing: '.18em', color: 'rgba(242,237,230,.68)' }}>SENT</div>
         </div>
         <div style={{ marginTop: 20, fontFamily: "'Playfair Display', serif", fontSize: 33, lineHeight: 1.2, color: '#F2EDE6' }}>
-          Thank you for<br />helping {inviterName}.
+          Thank you for<br />helping them.
         </div>
         <div style={{ marginTop: 19, fontSize: 14, lineHeight: 1.65, color: 'rgba(242,237,230,.78)', maxWidth: 300, textWrap: 'pretty' }}>
-          What you shared stays private. {inviterName} will only see the broader themes Anaphora draws from it, and decides for themselves what to keep.
+          What you shared stays private. They will only see the broader themes Anaphora draws from it, and decide for themselves what to keep.
         </div>
         <button onClick={goApp} style={{ marginTop: 26, padding: '13px 24px', border: '1px solid rgba(242,237,230,.28)', borderRadius: 999, background: 'transparent', color: '#F2EDE6', fontSize: 13.5, cursor: 'pointer' }}>Go to Anaphora</button>
       </div>

@@ -212,14 +212,6 @@ class DiscoveryResultResponse(BaseModel):
     readiness_pct: int
 
 
-class ProfileOut(BaseModel):
-    name: Optional[str] = None
-
-
-class ProfileUpdate(BaseModel):
-    name: str = Field(min_length=1, max_length=60)
-
-
 class FriendInviteCreateResponse(BaseModel):
     token: str
     invite_count: int
@@ -227,7 +219,6 @@ class FriendInviteCreateResponse(BaseModel):
 
 
 class FriendInviteInfo(BaseModel):
-    inviter_name: str
     questions: list[dict]
 
 

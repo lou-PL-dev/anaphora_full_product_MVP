@@ -2,14 +2,15 @@
 
 Deliberately static and small: four lightweight questions, no AI
 conversation stage (PRD section 20 is explicitly out of scope for this
-pass). Prompts use {name} so callers can substitute the inviting user's
-first name before sending them to the friend.
+pass). The friend already knows who invited them (they got the link
+directly from that person) — the app never needs to know or show the
+inviting user's name, so the questions are phrased generically ("them").
 """
 
 FRIEND_QUESTIONS = [
     {
         "id": "brings_out_best",
-        "prompt": "What kind of person brings out the best in {name}?",
+        "prompt": "What kind of person brings out the best in them?",
         "options": [
             {"id": "grounding", "label": "Someone grounding"},
             {"id": "adventurous", "label": "Someone adventurous"},
@@ -21,19 +22,19 @@ FRIEND_QUESTIONS = [
     },
     {
         "id": "wants_vs_needs",
-        "prompt": "What does {name} think they want that you're not convinced they actually need?",
+        "prompt": "What do they think they want that you're not convinced they actually need?",
         "text": True,
         "placeholder": "Write whatever comes to mind…",
     },
     {
         "id": "past_relationship",
-        "prompt": "Think about someone {name} dated who you weren't crazy about. What did you see that perhaps they didn't? (No names, please.)",
+        "prompt": "Think about someone they dated who you weren't crazy about. What did you see that perhaps they didn't? (No names, please.)",
         "text": True,
         "placeholder": "Write whatever comes to mind…",
     },
     {
         "id": "worked_well",
-        "prompt": "What have you seen work particularly well for {name}?",
+        "prompt": "What have you seen work particularly well for them?",
         "text": True,
         "placeholder": "Write whatever comes to mind…",
     },
@@ -42,17 +43,8 @@ FRIEND_QUESTIONS = [
 FRIEND_QUESTION_IDS = {q["id"] for q in FRIEND_QUESTIONS}
 
 
-def formatted_questions(name: str) -> list[dict]:
-    out = []
-    for q in FRIEND_QUESTIONS:
-        copy = dict(q)
-        copy["prompt"] = q["prompt"].format(name=name)
-        out.append(copy)
-    return out
-
-
-def question_prompt(question_id: str, name: str) -> str:
+def question_prompt(question_id: str) -> str:
     for q in FRIEND_QUESTIONS:
         if q["id"] == question_id:
-            return q["prompt"].format(name=name)
+            return q["prompt"]
     return question_id

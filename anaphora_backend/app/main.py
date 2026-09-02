@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from .database import Base, engine, SessionLocal
 from .models import Candidate, Discovery
 from .discovery_registry import DISCOVERIES
-from .routers import conversation_router, blueprint_router, readiness_router, discovery_router, matching_router, preferences_router, profile_router, friends_router
+from .routers import conversation_router, blueprint_router, readiness_router, discovery_router, matching_router, preferences_router, friends_router
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # anaphora_backend/
 TEST_UI_PATH = BASE_DIR / "test_ui" / "index.html"
@@ -65,7 +65,6 @@ app.include_router(readiness_router.router)
 app.include_router(discovery_router.router)
 app.include_router(matching_router.router)
 app.include_router(preferences_router.router)
-app.include_router(profile_router.router)
 app.include_router(friends_router.router)
 
 

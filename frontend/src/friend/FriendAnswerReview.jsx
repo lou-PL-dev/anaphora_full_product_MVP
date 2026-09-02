@@ -3,13 +3,13 @@ import ErrorBanner from '../components/ErrorBanner';
 // Reuses Blueprint.jsx's header pattern and Convos.jsx's list-card
 // styling — lets the friend see and edit their own answers (PRD section
 // 18's "friend can add more/change things") before anything is sent.
-export default function FriendAnswerReview({ inviterName, questions, answers, onEditQuestion, onSubmit, submitting, error }) {
+export default function FriendAnswerReview({ questions, answers, onEditQuestion, onSubmit, submitting, error }) {
   return (
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', background: '#FFFFFF' }}>
       <div style={{ padding: '62px 22px 18px', background: 'linear-gradient(160deg, #F2EDE6, #FFFFFF)' }}>
         <div style={{ fontSize: 11, letterSpacing: '.16em', color: '#A69ACD' }}>BEFORE YOU SEND</div>
         <div style={{ marginTop: 14, fontFamily: "'Playfair Display', serif", fontSize: 27, lineHeight: 1.25, color: '#2F4A3F' }}>Take a look at what you shared</div>
-        <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>Tap anything you'd like to change about {inviterName}.</div>
+        <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>Tap anything you'd like to change.</div>
       </div>
       <div style={{ flex: 1, padding: '4px 22px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {questions.map((q) => (

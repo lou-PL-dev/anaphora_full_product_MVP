@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import get_current_user
-from ..friend_library import FRIEND_QUESTION_IDS, formatted_questions, question_prompt
+from ..friend_library import FRIEND_QUESTIONS, FRIEND_QUESTION_IDS, question_prompt
 from ..chains.friend_chain import extract_friend_signals
 from ..models import BlueprintSignal, FriendInvite, FriendResponse, FriendSignal, User
 from ..readiness import compute_readiness
@@ -140,9 +140,7 @@ def get_invite_info(token: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "This invite link isn't valid.")
     if invite.status == "answered":
         raise HTTPException(410, "This invite link has already been used.")
-    inviter = db.get(User, invite.user_id)
-    name = (inviter.name or "").strip() or "your friend"
-    return FriendInviteInfo(inviter_name=name, questions=formatted_questions(name))
+    return FriendInviteInfo(questions=FRIEND_QUESTIONS)
 
 
 @router.post("/invite/{token}/respond")
@@ -153,9 +151,6 @@ def respond_to_invite(token: str, body: FriendRespondRequest, db: Session = Depe
     if invite.status == "answered":
         raise HTTPException(410, "This invite link has already been used.")
 
-    inviter = db.get(User, invite.user_id)
-    name = (inviter.name or "").strip() or "your friend"
-
     answers_map: dict[str, str] = {}
     for item in body.answers:
         if item.question_id not in FRIEND_QUESTION_IDS:
@@ -164,8 +159,8 @@ def respond_to_invite(token: str, body: FriendRespondRequest, db: Session = Depe
     if not answers_map:
         raise HTTPException(400, "At least one answer is required")
 
-    labeled_answers = {question_prompt(qid, name): answer for qid, answer in answers_map.items()}
-    result = extract_friend_signals(name, labeled_answers)
+    labeled_answers = {question_prompt(qid): answer for qid, answer in answers_map.items()}
+    result = extract_friend_signals(labeled_answers)
 
     try:
         response = FriendResponse(
