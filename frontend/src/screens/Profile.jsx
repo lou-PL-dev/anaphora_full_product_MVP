@@ -17,10 +17,18 @@ const MEETING_OPTIONS = [
   ['other', 'Something else'],
 ];
 
+function yearsAgoIso(years) {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, goBlueprint }) {
   const [userGender, setUserGender] = useState(null);
   const [userGenderDetail, setUserGenderDetail] = useState('');
-  const [userAge, setUserAge] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [savedAge, setSavedAge] = useState(null);
   const [genderPreferences, setGenderPreferences] = useState([]);
   const [genderPreferenceDetail, setGenderPreferenceDetail] = useState('');
   const [ageMin, setAgeMin] = useState(18);
@@ -34,6 +42,8 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
   const [error, setError] = useState(null);
 
   const uid = useMemo(() => getOrCreateUserId(), []);
+  const latestAdultBirthDate = useMemo(() => yearsAgoIso(18), []);
+  const earliestBirthDate = useMemo(() => yearsAgoIso(99), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,12 +55,13 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
       if (profile) {
         setUserGender(profile.user_gender || null);
         setUserGenderDetail(profile.user_gender_detail || '');
-        setUserAge(profile.user_age ?? '');
+        setBirthDate(profile.birth_date || '');
+        setSavedAge(profile.user_age ?? null);
         setGenderPreferences(profile.gender_preferences || []);
         setGenderPreferenceDetail(profile.gender_preference_detail || '');
         setAgeMin(profile.age_min ?? 18);
         setAgeMax(profile.age_max ?? 99);
-        setEssentialsSaved(!!(profile.user_gender && profile.user_age));
+        setEssentialsSaved(!!(profile.user_gender && profile.birth_date));
         setPreferencesSaved(!!((profile.gender_preferences || []).length && profile.age_min != null && profile.age_max != null));
       }
       if (ready) {
@@ -94,7 +105,7 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
   };
 
   const saveEssentials = async () => {
-    if (!userGender || !userAge || essentialsSaving) return;
+    if (!userGender || !birthDate || essentialsSaving) return;
     if (userGender === 'other' && !userGenderDetail.trim()) {
       setError('Tell us more about your gender.');
       return;
@@ -104,13 +115,14 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
     const response = await apiCall(uid, 'PATCH', '/preferences', {
       user_gender: userGender,
       user_gender_detail: userGender === 'other' ? userGenderDetail.trim() : null,
-      user_age: Number(userAge),
+      birth_date: birthDate,
     });
     setEssentialsSaving(false);
     if (!response) {
       setError("We couldn't save your essentials. Please try again.");
       return;
     }
+    setSavedAge(response.user_age ?? null);
     setEssentialsSaved(true);
     refreshReadiness(response);
   };
@@ -168,14 +180,13 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
           <input value={userGenderDetail} onChange={(e) => { setUserGenderDetail(e.target.value); setEssentialsSaved(false); }} placeholder="Tell us more" style={{ marginTop: 10, width: '100%', padding: '11px 12px', borderRadius: 12, border: `1px solid ${SKY}`, color: SAGE, fontSize: 13, outline: 'none' }} />
         )}
 
-        <div style={{ marginTop: 18, fontSize: 12.5, color: SAGE }}>Age</div>
-        <div style={{ marginTop: 9, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <input type="number" min="18" max="99" value={userAge} onChange={(e) => { const raw = e.target.value; setUserAge(raw === '' ? '' : Math.min(99, Math.max(18, Number(raw)))); setEssentialsSaved(false); }} style={{ width: 88, padding: '10px 11px', borderRadius: 12, border: `1px solid ${SKY}`, color: SAGE, fontSize: 16, outline: 'none' }} />
-          <div style={{ fontSize: 10.5, lineHeight: 1.45, color: LAV }}>Used only for introduction eligibility.</div>
-        </div>
+        <div style={{ marginTop: 18, fontSize: 12.5, color: SAGE }}>Date of birth</div>
+        <input type="date" min={earliestBirthDate} max={latestAdultBirthDate} value={birthDate} onChange={(e) => { setBirthDate(e.target.value); setEssentialsSaved(false); setSavedAge(null); }} style={{ marginTop: 9, width: '100%', padding: '11px 12px', borderRadius: 12, border: `1px solid ${SKY}`, color: SAGE, fontSize: 13, outline: 'none', background: CLOUD }} />
+        {essentialsSaved && savedAge != null && (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: SAGE }}>Age {savedAge} · saved ✓</div>
+        )}
 
-        {essentialsSaved && <div style={{ marginTop: 12, fontSize: 11.5, color: SAGE }}>Your essentials are saved ✓</div>}
-        <button onClick={saveEssentials} disabled={!userGender || !userAge || essentialsSaving} style={{ marginTop: 16, width: '100%', padding: '12px 16px', borderRadius: 999, border: 'none', background: userGender && userAge && !essentialsSaving ? SAGE : SAND, color: userGender && userAge && !essentialsSaving ? CLOUD : SAGE, fontSize: 13, cursor: userGender && userAge && !essentialsSaving ? 'pointer' : 'default' }}>{essentialsSaving ? 'Saving…' : 'Save your essentials'}</button>
+        <button onClick={saveEssentials} disabled={!userGender || !birthDate || essentialsSaving} style={{ marginTop: 16, width: '100%', padding: '12px 16px', borderRadius: 999, border: 'none', background: userGender && birthDate && !essentialsSaving ? SAGE : SAND, color: userGender && birthDate && !essentialsSaving ? CLOUD : SAGE, fontSize: 13, cursor: userGender && birthDate && !essentialsSaving ? 'pointer' : 'default' }}>{essentialsSaving ? 'Saving…' : 'Save your essentials'}</button>
       </div>
 
       <div style={{ marginTop: 14, padding: 20, borderRadius: 20, background: CLOUD, border: `1px solid ${SKY}` }}>
