@@ -6,9 +6,8 @@ so later model calls do not repeatedly ingest the entire raw block.
 """
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
-
 from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import CoverageField, LongInputChunkDigest, ConversationObservation
 from .input_segmentation import segment_long_input
 
@@ -84,7 +83,7 @@ def digest_long_input(text: str) -> LongInputChunkDigest:
     if not chunks:
         return LongInputChunkDigest()
 
-    llm = ChatOpenAI(model=settings.openai_conversation_model, temperature=0, api_key=settings.openai_api_key)
+    llm = get_chat_llm(settings.openai_conversation_model, temperature=0)
     structured_llm = llm.with_structured_output(LongInputChunkDigest)
     digests = [
         structured_llm.invoke([

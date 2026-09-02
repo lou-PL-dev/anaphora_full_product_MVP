@@ -7,9 +7,7 @@ Discovery library). Responses are synthesized into a short personalised
 insight (PRD section 37, e.g. "You want strong roots without feeling
 stuck.") and mapped to lifestyle-category Blueprint signals.
 """
-from langchain_openai import ChatOpenAI
-
-from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import SignalItem, Strength
 
 DISCOVERY_ID = "life_you_are_building"
@@ -52,7 +50,7 @@ or diagnostic language."""
 
 
 def synthesize_insight(responses: dict[str, str]) -> str:
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.6, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0.6)
     answers_text = "\n".join(f"- {qid}: {answer}" for qid, answer in responses.items())
     result = llm.invoke([
         {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},

@@ -3,10 +3,10 @@ Operation A — Conversation (PRD section 31).
 The AI behaves like a thoughtful matchmaker while deliberately filling the
 missing pieces of BOTH sides of the Relationship Blueprint.
 """
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import CoverageField, ConversationTurnResult
 
 COVERAGE_FIELDS = set(CoverageField)
@@ -78,7 +78,7 @@ If one side is already far more complete than the other, spend this conversation
 
 def converse(history: list[dict], known_me: set[str] = frozenset(), known_ideal: set[str] = frozenset()) -> ConversationTurnResult:
     """Steer from compact working memory while returning atomic observations."""
-    llm = ChatOpenAI(model=settings.openai_conversation_model, temperature=0.7, api_key=settings.openai_api_key)
+    llm = get_chat_llm(settings.openai_conversation_model, temperature=0.7)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
     messages = _to_langchain_messages(history)
     note = _known_coverage_note(known_me, known_ideal)

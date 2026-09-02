@@ -9,9 +9,7 @@ user, and only once they explicitly accept each signal. The narrative is
 shown directly to that inviting user on their own Blueprint review, so it
 addresses them as "you" — there's no need to know or use anyone's name.
 """
-from langchain_openai import ChatOpenAI
-
-from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import FriendExtractionResult
 
 FRIEND_EXTRACTION_PROMPT = """You read a trusted friend's private answers about the person who invited them to answer — describing what kind of partner might suit that person and how they show up in relationships. You will address that person directly as "you", since they are the one who will read your output.
@@ -34,7 +32,7 @@ Rules:
 def extract_friend_signals(labeled_answers: dict[str, str]) -> FriendExtractionResult:
     """labeled_answers maps each question's full prompt text to the
     friend's answer, so the LLM sees real questions, not ids."""
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.2, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0.2)
     structured_llm = llm.with_structured_output(FriendExtractionResult)
     payload = "\n\n".join(f"Q: {question}\nA: {answer}" for question, answer in labeled_answers.items())
     return structured_llm.invoke([

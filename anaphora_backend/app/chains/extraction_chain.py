@@ -5,9 +5,7 @@ The canonical machine-readable source is the accumulated atomic observations
 captured during conversation. The polished narrative is generated from that
 state; it is not itself the source of truth for matching.
 """
-from langchain_openai import ChatOpenAI
-
-from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import ConversationObservation, ExtractionResult
 
 RECONCILIATION_SYSTEM_PROMPT = """You reconcile Anaphora's accumulated atomic conversation observations into one Relationship Blueprint.
@@ -44,7 +42,7 @@ def observations_from_history(history: list[dict]) -> list[ConversationObservati
 
 def reconcile_blueprint(observations: list[ConversationObservation]) -> ExtractionResult:
     """Build the canonical Blueprint and narrative from accumulated evidence."""
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0)
     structured_llm = llm.with_structured_output(ExtractionResult)
     payload = "\n".join(
         f"{i + 1}. perspective={obs.perspective}; category={obs.category.value}; "
@@ -67,7 +65,7 @@ def _legacy_extract(history: list[dict]) -> ExtractionResult:
         lines.append(f"{speaker}: {content}")
     transcript = "\n".join(lines)
 
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0)
     structured_llm = llm.with_structured_output(ExtractionResult)
     return structured_llm.invoke([
         {"role": "system", "content": LEGACY_TRANSCRIPT_PROMPT},

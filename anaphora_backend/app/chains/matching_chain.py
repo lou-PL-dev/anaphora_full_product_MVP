@@ -22,10 +22,9 @@ import math
 import re
 from collections import defaultdict
 
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from sqlalchemy.orm import Session
 
-from ..config import settings
+from ..llm import get_chat_llm, get_embedder
 from ..models import BlueprintSignal, Candidate
 from ..schemas import MatchExplanationsResult, MatchSection
 
@@ -127,7 +126,7 @@ def _profile_embedding_text(signals: list[BlueprintSignal]) -> str:
 
 
 def embed_text(text: str) -> list[float]:
-    embedder = OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
+    embedder = get_embedder()
     return embedder.embed_query(text)
 
 
@@ -326,7 +325,7 @@ def semantic_rerank_candidates(
     if not all_texts:
         return []
 
-    embedder = OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
+    embedder = get_embedder()
     vectors = embedder.embed_documents(all_texts)
 
     def vector(text: str) -> list[float]:
@@ -371,7 +370,7 @@ def judge_and_explain_candidates(
         )
         for candidate, evidence, reciprocal_complete in candidates
     )
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.2, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0.2)
     structured_llm = llm.with_structured_output(MatchExplanationsResult)
     result = structured_llm.invoke([
         {"role": "system", "content": MATCH_SYSTEM_PROMPT},

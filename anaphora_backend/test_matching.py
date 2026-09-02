@@ -100,7 +100,7 @@ def test_semantic_reranker_prefers_multi_category_evidence():
 
     mock_embedder = MagicMock()
     mock_embedder.embed_documents.side_effect = fake_embed_documents
-    with patch("app.chains.matching_chain.OpenAIEmbeddings", return_value=mock_embedder):
+    with patch("app.llm.OpenAIEmbeddings", return_value=mock_embedder):
         reranked = semantic_rerank_candidates(
             [(broad_only, 0.95), (grounded, 0.70)], user_signals, finalist_size=2
         )
@@ -122,7 +122,7 @@ def test_semantic_reranker_caps_finalists():
     ]
     mock_embedder = MagicMock()
     mock_embedder.embed_documents.side_effect = lambda texts: [[1.0, 0.0] for _ in texts]
-    with patch("app.chains.matching_chain.OpenAIEmbeddings", return_value=mock_embedder):
+    with patch("app.llm.OpenAIEmbeddings", return_value=mock_embedder):
         result = semantic_rerank_candidates(candidates, user_signals)
     assert len(result) == FINALIST_SIZE
 
@@ -144,7 +144,7 @@ def test_judge_and_explain_drops_sections_when_not_genuine():
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
-    with patch("app.chains.matching_chain.ChatOpenAI", return_value=mock_llm):
+    with patch("app.llm.ChatOpenAI", return_value=mock_llm):
         judged = judge_and_explain_candidates(
             "personality: warm", [(c1, ["USER WANTS -> CANDIDATE IS: personality evidence"], True)]
         )
@@ -168,7 +168,7 @@ def test_judge_and_explain_uncovered_candidate_fails_closed():
     mock_llm = MagicMock()
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
-    with patch("app.chains.matching_chain.ChatOpenAI", return_value=mock_llm):
+    with patch("app.llm.ChatOpenAI", return_value=mock_llm):
         judged = judge_and_explain_candidates(
             "personality: warm",
             [(c1, ["USER WANTS -> CANDIDATE IS: personality evidence"], True), (c2, [], False)],

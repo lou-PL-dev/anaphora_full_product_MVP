@@ -37,7 +37,7 @@ def test_relationship_reasoner_preserves_qualitative_fit():
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
 
-    with patch("app.chains.relationship_reasoning_chain.ChatOpenAI", return_value=llm):
+    with patch("app.llm.ChatOpenAI", return_value=llm):
         verdicts = assess_relationship_candidates(
             "USER IDEAL_PARTNER: emotionally steady\nUSER ME: warm and independent",
             [(candidate, ["USER WANTS -> CANDIDATE IS: steadiness", "CANDIDATE WANTS -> USER IS: independence"], True)],
@@ -64,7 +64,7 @@ def test_relationship_reasoner_fails_closed_and_drops_sections():
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
 
-    with patch("app.chains.relationship_reasoning_chain.ChatOpenAI", return_value=llm):
+    with patch("app.llm.ChatOpenAI", return_value=llm):
         verdicts = assess_relationship_candidates("USER BLUEPRINT", [(candidate, [], True)])
 
     assert verdicts["c1"] == (False, None, [])
@@ -85,7 +85,7 @@ def test_relationship_reasoner_defaults_genuine_uncertain_fit_to_worth_exploring
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
 
-    with patch("app.chains.relationship_reasoning_chain.ChatOpenAI", return_value=llm):
+    with patch("app.llm.ChatOpenAI", return_value=llm):
         verdicts = assess_relationship_candidates("USER BLUEPRINT", [(candidate, [], True)])
 
     assert verdicts["c1"][1] == FitLevel.worth_exploring

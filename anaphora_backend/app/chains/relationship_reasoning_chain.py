@@ -7,9 +7,7 @@ It never searches the candidate database and never invents evidence.
 """
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
-
-from ..config import settings
+from ..llm import get_chat_llm
 from ..models import Candidate
 from ..schemas import FitLevel, MatchExplanationsResult, MatchSection
 
@@ -76,7 +74,7 @@ def assess_relationship_candidates(
             f"PRECOMPUTED RECIPROCAL EVIDENCE:\n{evidence_block}"
         )
 
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.15, api_key=settings.openai_api_key)
+    llm = get_chat_llm(temperature=0.15)
     structured_llm = llm.with_structured_output(MatchExplanationsResult)
     result = structured_llm.invoke([
         {"role": "system", "content": RELATIONSHIP_REASONING_PROMPT},

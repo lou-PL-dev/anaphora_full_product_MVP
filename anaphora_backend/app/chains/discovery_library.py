@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from langchain_openai import ChatOpenAI
-
-from ..config import settings
+from ..llm import get_chat_llm
 from ..schemas import SignalItem, Strength
 
 
@@ -208,7 +206,7 @@ Sound like a thoughtful friend, not a test result. Do not diagnose, label attach
 For Relationship Archaeology especially, present any pattern as something worth exploring, not a conclusion."""
 
     def synthesize(responses: dict[str, str]) -> str:
-        llm = ChatOpenAI(model=settings.openai_model, temperature=0.6, api_key=settings.openai_api_key)
+        llm = get_chat_llm(temperature=0.6)
         answers_text = "\n".join(f"- {qid}: {answer}" for qid, answer in responses.items())
         result = llm.invoke([
             {"role": "system", "content": system},
