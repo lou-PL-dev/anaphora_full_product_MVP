@@ -26,6 +26,13 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
     };
   }, []);
 
+  // App receives fresh readiness values from conversation/discovery responses.
+  // Keep the local display cache aligned so an older mount-time GET cannot
+  // mask a newer 100% value while the Intro tab already sees backend readiness.
+  useEffect(() => {
+    if (readiness != null) setLiveReadiness(readiness);
+  }, [readiness]);
+
   const shownReadiness = liveReadiness ?? readiness;
   const arcOffset = 427 - 427 * (shownReadiness / 100);
   const intro = liveBreakdown?.introduction_essentials;
