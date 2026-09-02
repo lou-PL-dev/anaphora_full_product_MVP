@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -64,16 +66,23 @@ def _encode_preferences(values: list[str], detail: str | None) -> str:
     return ",".join(cleaned)
 
 
+def _age_on(birth_date: date, today: date | None = None) -> int:
+    today = today or date.today()
+    return today.year - birth_date.year - (
+        (today.month, today.day) < (birth_date.month, birth_date.day)
+    )
+
+
 class MatchingPreferencesUpdate(BaseModel):
-    # New Round 2 fields. All are optional so the two cards can be saved
-    # independently and the old frontend payload remains backwards compatible.
+    # Both cards can be saved independently.
     user_gender: str | None = None
     user_gender_detail: str | None = Field(default=None, max_length=80)
-    user_age: int | None = Field(default=None, ge=18, le=99)
+    birth_date: date | None = None
     gender_preferences: list[str] | None = None
     gender_preference_detail: str | None = Field(default=None, max_length=80)
 
-    # Legacy single-choice field retained while Netlify/Render roll over.
+    # Legacy fields retained during deployment overlap.
+    user_age: int | None = Field(default=None, ge=18, le=99)
     gender_preference: str | None = Field(default=None, min_length=1)
     age_min: int | None = Field(default=None, ge=18, le=99)
     age_max: int | None = Field(default=None, ge=18, le=99)
@@ -82,12 +91,12 @@ class MatchingPreferencesUpdate(BaseModel):
 class MatchingPreferencesOut(BaseModel):
     user_gender: str | None
     user_gender_detail: str | None
+    birth_date: date | None
     user_age: int | None
     gender_preferences: list[str]
     gender_preference_detail: str | None
     age_min: int | None
     age_max: int | None
-    # Kept for the previous frontend during deployment overlap.
     gender_preference: str | None
 
 
@@ -106,10 +115,12 @@ def _response_values(user: User) -> dict:
             pass
     user_gender, user_gender_detail = _split_other(user.gender)
     gender_preferences, gender_preference_detail = _decode_preferences(user.gender_preference)
+    derived_age = _age_on(user.birth_date) if user.birth_date else user.age
     return {
         "user_gender": user_gender,
         "user_gender_detail": user_gender_detail,
-        "user_age": user.age,
+        "birth_date": user.birth_date,
+        "user_age": derived_age,
         "gender_preferences": gender_preferences,
         "gender_preference_detail": gender_preference_detail,
         "age_min": age_min,
@@ -134,12 +145,21 @@ def save_matching_preferences(
         if gender not in ALLOWED_GENDERS:
             raise HTTPException(400, "Unsupported gender")
         user.gender = _encode_gender(gender, body.user_gender_detail)
-    if body.user_age is not None:
+
+    if body.birth_date is not None:
+        derived_age = _age_on(body.birth_date)
+        if derived_age < 18:
+            raise HTTPException(400, "You must be at least 18")
+        if derived_age > 99:
+            raise HTTPException(400, "Please enter a valid birth date")
+        user.birth_date = body.birth_date
+        user.age = derived_age
+    elif body.user_age is not None:
+        # Backwards-compatible only; new UI sends birth_date.
         user.age = body.user_age
 
     preference_values = body.gender_preferences
     if preference_values is None and body.gender_preference is not None:
-        # Translate legacy labels into the canonical values used by the new UI.
         legacy = body.gender_preference.strip().lower()
         preference_values = {
             "women": ["women"], "woman": ["women"], "female": ["women"],
