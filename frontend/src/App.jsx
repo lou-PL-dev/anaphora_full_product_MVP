@@ -40,7 +40,6 @@ const initialState = {
   preferencesSaved: false, preferencesSaving: false, preferencesError: null,
   matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null, hasVisitedReadyMatches: false,
   legalSection: 'privacy', error: null,
-  name: '',
   friends: [], inviteCreating: false, inviteToken: null, inviteError: null,
   friendReviewInviteId: null, friendReview: null, friendReviewLoading: false, friendReviewSelected: [],
   friendCommitting: false, friendCommitted: false, friendAddedCount: 0,
@@ -87,9 +86,6 @@ export default function App() {
         patch({ completedDiscoveries: completed, discoveryDone: completed.includes(DEFAULT_DISCOVERY_ID) });
       }
     });
-    api('GET', '/profile').then((r) => {
-      if (r && r.name) patch({ name: r.name });
-    });
     api('GET', '/friends').then((r) => {
       if (Array.isArray(r)) patch({ friends: r });
     });
@@ -119,14 +115,6 @@ export default function App() {
   const goBlueprintAboutYou = () => patch({ screen: 'blueprint', blueprintScrollAboutYou: true, error: null });
   const clearBlueprintScroll = () => patch({ blueprintScrollAboutYou: false });
 
-  const onName = (e) => patch({ name: e.target.value });
-  // Collected once, up front, so a friend's invite link can say "<Name>
-  // trusts your judgment" instead of generic copy.
-  const beginWithName = async () => {
-    if (!s.name.trim()) return;
-    await api('PATCH', '/profile', { name: s.name.trim() });
-    beginConversation();
-  };
   const beginConversation = async () => {
     patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, convoCompleted: false, error: null });
     const r = await api('POST', '/conversation/start');
@@ -371,7 +359,7 @@ export default function App() {
 
   let screenEl = null;
   switch (s.screen) {
-    case 'welcome': screenEl = <Welcome onBegin={beginWithName} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} name={s.name} onName={onName} canBegin={!!s.name.trim()} />; break;
+    case 'welcome': screenEl = <Welcome onBegin={beginConversation} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
     case 'legal': screenEl = <Legal goBack={go('welcome')} section={s.legalSection} />; break;
     case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} turnCount={s.turnCount} readyToComplete={s.readyToComplete} isFollowUp={s.hasExistingBlueprint} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
     case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} goHome={go('home')} groups={groups} isFollowUp={s.wasFollowUp} />; break;
