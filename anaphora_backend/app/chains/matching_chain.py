@@ -265,7 +265,10 @@ def _candidate_signals(candidate: Candidate, perspective: str) -> list[dict]:
     for raw in candidate.signals or []:
         if not isinstance(raw, dict) or raw.get("kind") == "demographic_preferences":
             continue
-        raw_perspective = raw.get("perspective")
+        # Legacy signals predating the "perspective" field default to ME —
+        # demographic_preferences entries are already excluded above, so this
+        # can't misclassify those.
+        raw_perspective = raw.get("perspective", "ME")
         if raw_perspective == perspective:
             result.append(raw)
     return result
