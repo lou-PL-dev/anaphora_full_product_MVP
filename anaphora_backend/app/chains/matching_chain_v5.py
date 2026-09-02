@@ -1,8 +1,7 @@
 """Iteration 5 orchestration for relationship-level matching.
 
 Iteration 4 remains responsible for eligibility, broad retrieval and reciprocal
-semantic reranking. This module adds the final relationship reasoning layer and
-keeps the public API unchanged.
+semantic reranking. This module adds the final relationship reasoning layer.
 """
 from __future__ import annotations
 
@@ -17,6 +16,7 @@ from .matching_chain import (
     MIN_RECIPROCAL_DIRECTION_SCORE,
     STRONG_FIT_THRESHOLD,
     _profile_embedding_text,
+    candidate_accepts_user,
     embed_text,
     retrieve_candidates,
     semantic_rerank_candidates,
@@ -32,13 +32,16 @@ def find_matches(
     gender_preference: str | None = None,
     age_min: int | None = None,
     age_max: int | None = None,
+    user_gender: str | None = None,
+    user_age: int | None = None,
 ) -> list[MatchOut]:
-    """Return at most one introduction after relationship-level reasoning."""
+    """Return at most one introduction after reciprocal eligibility + reasoning."""
     if not user_ideal_partner_signals:
         return []
     user_me_signals = user_me_signals or []
 
-    # Cheap search still starts from MY IDEAL_PARTNER -> CANDIDATE ME.
+    # Direction 1 demographic eligibility: does the candidate satisfy what
+    # this user explicitly said they are open to meeting?
     query_text = _profile_embedding_text(user_ideal_partner_signals)
     query_embedding = embed_text(query_text)
     retrieved = retrieve_candidates(
@@ -49,6 +52,15 @@ def find_matches(
         age_min=age_min,
         age_max=age_max,
     )
+
+    # Direction 2 demographic eligibility: is this user inside the candidate's
+    # own explicit gender/age preferences? Old seeded candidates without this
+    # metadata remain eligible until the pool is reseeded.
+    retrieved = [
+        (candidate, similarity)
+        for candidate, similarity in retrieved
+        if candidate_accepts_user(candidate, user_gender, user_age)
+    ]
 
     # Reciprocal semantic evidence narrows the pool before the expensive
     # relationship reasoner sees anything.
@@ -85,9 +97,6 @@ def find_matches(
         if not has_match or not sections:
             continue
 
-        # The reasoner interprets the relationship; deterministic gates remain
-        # the final safety check for the strongest product label. This prevents
-        # a persuasive explanation from upgrading a materially weak direction.
         strong_fit_allowed = (
             reciprocal_complete
             and reverse is not None
