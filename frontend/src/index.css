@@ -27,4 +27,26 @@ input[type=range].ap-sl::-webkit-slider-thumb {
   border: 1px solid #DDEAE6; box-shadow: 0 4px 14px rgba(166,154,205,.18); cursor: grab;
 }
 
+input[type=range].ap-dual-range {
+  -webkit-appearance: none; appearance: none;
+  position: absolute; inset: 0; width: 100%; height: 34px; margin: 0;
+  background: transparent; outline: none; pointer-events: none;
+}
+input[type=range].ap-dual-range::-webkit-slider-runnable-track {
+  height: 5px; background: transparent;
+}
+input[type=range].ap-dual-range::-moz-range-track {
+  height: 5px; background: transparent;
+}
+input[type=range].ap-dual-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7.5px;
+  border-radius: 50%; background: #FFFFFF; border: 2px solid #A69ACD;
+  box-shadow: 0 2px 5px rgba(47,74,63,.10); cursor: grab; pointer-events: auto;
+}
+input[type=range].ap-dual-range::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%; background: #FFFFFF;
+  border: 2px solid #A69ACD; box-shadow: 0 2px 5px rgba(47,74,63,.10);
+  cursor: grab; pointer-events: auto;
+}
+
 button { border: none; background: none; }
