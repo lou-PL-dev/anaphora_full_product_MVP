@@ -33,7 +33,6 @@ export default function Blueprint({ goHome, groups, signalCount, narrative, scro
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ padding: '22px 22px 18px', background: 'linear-gradient(160deg, #F2EDE6, #FFFFFF)' }}>
           <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, lineHeight: 1.2, color: '#2F4A3F' }}>What I understood</div>
-          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>{signalCount} signals, drawn from your own words. Tap anything that isn't quite right.</div>
         </div>
 
         {narrative && <div style={{ margin: '4px 22px 22px', padding: '22px 22px 24px', borderRadius: 22, background: '#FFFFFF', border: '1px solid #DDEAE6', boxShadow: '0 8px 26px rgba(166,154,205,.10)' }}><div style={{ fontSize: 10, letterSpacing: '.15em', color: '#A69ACD' }}>THE PERSON I'M PICTURING<br />FOR YOU</div><div style={{ marginTop: 12, fontFamily: "'Playfair Display', serif", fontSize: 15.5, lineHeight: 1.75, color: '#2F4A3F', whiteSpace: 'pre-wrap' }}>{narrative}</div></div>}
@@ -45,6 +44,10 @@ export default function Blueprint({ goHome, groups, signalCount, narrative, scro
       </div>
 
       <div style={{ flex: 'none', zIndex: 10, padding: '12px 22px 24px', background: 'rgba(255,255,255,.97)', borderTop: '1px solid #DDEAE6', boxShadow: '0 -8px 24px rgba(47,74,63,.06)' }}>
+        <div style={{ marginBottom: 12, textAlign: 'center', fontSize: 12.5, lineHeight: 1.45, color: '#2F4A3F' }}>
+          <div>{signalCount} signals, drawn from your own words.</div>
+          <div style={{ color: '#A69ACD' }}>Tap to change what isn't quite right.</div>
+        </div>
         <button onClick={goHome} style={{ width: '100%', padding: '15px 22px', border: 'none', borderRadius: 999, background: '#2F4A3F', color: '#F2EDE6', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>Looks good! Explore Anaphora →</button>
       </div>
     </div>
