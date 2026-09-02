@@ -46,17 +46,25 @@ def list_friend_invites(user: User = Depends(get_current_user), db: Session = De
         .order_by(FriendInvite.created_at.desc())
         .all()
     )
-    out = []
-    for invite in invites:
-        response = db.query(FriendResponse).filter(FriendResponse.invite_id == invite.id).first()
-        out.append(FriendInviteListItem(
+    responses_by_invite = {
+        response.invite_id: response
+        for response in (
+            db.query(FriendResponse)
+            .filter(FriendResponse.invite_id.in_([invite.id for invite in invites]))
+            .all()
+        )
+    }
+    return [
+        FriendInviteListItem(
             id=invite.id,
             status=invite.status,
             friend_name=response.friend_name if response else None,
             reviewed=bool(response.reviewed) if response else False,
             created_at=invite.created_at,
-        ))
-    return out
+        )
+        for invite in invites
+        for response in [responses_by_invite.get(invite.id)]
+    ]
 
 
 @router.get("/{invite_id}/review", response_model=FriendReviewOut)
