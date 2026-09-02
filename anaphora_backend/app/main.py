@@ -20,6 +20,20 @@ else:
     Base.metadata.create_all(bind=engine, tables=other_tables)
 
 
+def sync_schema() -> None:
+    """Small idempotent MVP schema sync for additive columns."""
+    with engine.begin() as conn:
+        if engine.dialect.name == "postgresql":
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
+        else:
+            columns = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+            if "birth_date" not in columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN birth_date DATE"))
+
+
+sync_schema()
+
+
 def sync_indexes() -> None:
     """Create indexes the model definitions declare on FK/lookup columns
     that get filtered on nearly every request.
