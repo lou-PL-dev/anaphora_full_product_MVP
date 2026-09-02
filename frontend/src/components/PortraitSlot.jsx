@@ -14,7 +14,7 @@ export default function PortraitSlot({ src, label, style }) {
               inset: -18,
               backgroundImage: `url(${src})`,
               backgroundSize: 'cover',
-              backgroundPosition: 'center',
+              backgroundPosition: 'center 30%',
               filter: 'blur(18px)',
               opacity: 0.28,
               transform: 'scale(1.08)',
@@ -25,11 +25,11 @@ export default function PortraitSlot({ src, label, style }) {
             alt={label || ''}
             style={{
               position: 'relative',
-              zIndex: 1,
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              objectPosition: 'center',
+              width: '84%',
+              height: '96%',
+              objectFit: 'cover',
+              objectPosition: 'center 28%',
+              borderRadius: '44% 56% 50% 50% / 48% 48% 52% 52%',
             }}
           />
         </>
