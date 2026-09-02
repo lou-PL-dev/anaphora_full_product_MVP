@@ -31,6 +31,7 @@ const initialState = {
   signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], hasExistingBlueprint: false, wasFollowUp: false,
   discoveryId: DEFAULT_DISCOVERY_ID, discoveryTitle: '', discoveryReturnScreen: 'home', discoveryLoading: false,
   questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [], suggestedDiscoveryId: null,
+  blueprintScrollAboutYou: false,
   discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false, inviteOpen: false, copied: false,
@@ -104,6 +105,8 @@ export default function App() {
 
   const go = (screen) => () => patch({ screen, error: null });
   const goLegal = (legalSection) => () => patch({ screen: 'legal', legalSection, error: null });
+  const goBlueprintAboutYou = () => patch({ screen: 'blueprint', blueprintScrollAboutYou: true, error: null });
+  const clearBlueprintScroll = () => patch({ blueprintScrollAboutYou: false });
 
   const beginConversation = async () => {
     patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, convoCompleted: false, error: null });
@@ -322,14 +325,14 @@ export default function App() {
     case 'legal': screenEl = <Legal goBack={go('welcome')} section={s.legalSection} />; break;
     case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} turnCount={s.turnCount} readyToComplete={s.readyToComplete} isFollowUp={s.hasExistingBlueprint} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
     case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} goHome={go('home')} groups={groups} isFollowUp={s.wasFollowUp} />; break;
-    case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />; break;
+    case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} scrollToAboutYou={s.blueprintScrollAboutYou} onScrolledAboutYou={clearBlueprintScroll} />; break;
     case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} nextDiscovery={nextDiscovery} startDiscovery={startDiscovery} />; break;
     case 'convos': screenEl = <Convos convoStatus={s.convoCompleted ? 'Completed · ' + s.turnCount + ' turns' : (s.messages.length ? 'In progress' : 'Not started')} convoCta={s.convoCompleted ? 'Continue' : (s.messages.length ? 'Resume' : 'Start')} resumeConversation={resumeConversation} discoveries={discoveries} startDiscovery={startDiscovery} />; break;
     case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Choose the most fitting'} dqNextBg={answered ? SAGE : '#F2EDE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
     case 'friends': screenEl = <Friends openInvite={openInvite} />; break;
-    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} groups={groups} resumeConversation={resumeConversation} />; break;
+    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} signalCount={s.signals.length} goBlueprint={goBlueprintAboutYou} />; break;
     default: screenEl = null;
   }
 
