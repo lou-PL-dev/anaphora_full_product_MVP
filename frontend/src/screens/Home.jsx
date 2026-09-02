@@ -1,7 +1,6 @@
-export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions }) {
+export default function Home({ readiness, readinessHeadline, readinessSub, insight, steps, openPlans, goBlueprint, signalCount, discoverySaving, discoverySaveError, retryDiscovery, postMatchMode, refinementActions, nextDiscovery, startDiscovery }) {
   const arcOffset = 427 - 427 * (readiness / 100);
   const refinementByKey = Object.fromEntries((refinementActions || []).map((action) => [action.key, action]));
-  const discoveryAction = refinementByKey.discover;
   const conversationAction = refinementByKey.talk;
   const friendAction = refinementByKey.friend;
 
@@ -56,16 +55,18 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
 
         {postMatchMode ? (
           <>
-            <div>
-              <div style={{ fontSize: 10.5, letterSpacing: '.15em', color: '#2F4A3F', marginBottom: 9 }}>DISCOVER SOMETHING NEW</div>
-              <button onClick={discoveryAction?.onGo} style={{ position: 'relative', overflow: 'hidden', width: '100%', padding: '21px 21px 20px', border: 'none', borderRadius: 22, background: 'linear-gradient(145deg, #DDEAE6 0%, #F2EDE6 100%)', textAlign: 'left', cursor: 'pointer' }}>
-                <span style={{ position: 'absolute', width: 130, height: 130, right: -38, top: -52, borderRadius: '48% 52% 60% 40% / 52% 42% 58% 48%', background: 'rgba(166,154,205,.17)' }} />
-                <span style={{ position: 'relative', display: 'block', fontSize: 9.5, letterSpacing: '.15em', color: '#A69ACD' }}>2 MIN DISCOVERY</span>
-                <span style={{ position: 'relative', display: 'block', marginTop: 9, maxWidth: 270, fontFamily: "'Playfair Display', serif", fontSize: 23, lineHeight: 1.25, color: '#2F4A3F' }}>What kind of life are you building?</span>
-                <span style={{ position: 'relative', display: 'block', marginTop: 9, fontSize: 12.5, lineHeight: 1.5, color: '#2F4A3F' }}>A few quick questions to reveal what feels right for you.</span>
-                <span style={{ position: 'relative', display: 'block', marginTop: 15, fontSize: 12, color: '#A69ACD' }}>Explore →</span>
-              </button>
-            </div>
+            {nextDiscovery && (
+              <div>
+                <div style={{ fontSize: 10.5, letterSpacing: '.15em', color: '#2F4A3F', marginBottom: 9 }}>DISCOVER SOMETHING NEW</div>
+                <button onClick={() => startDiscovery(nextDiscovery.id, 'home')} style={{ position: 'relative', overflow: 'hidden', width: '100%', padding: '21px 21px 20px', border: 'none', borderRadius: 22, background: 'linear-gradient(145deg, #DDEAE6 0%, #F2EDE6 100%)', textAlign: 'left', cursor: 'pointer' }}>
+                  <span style={{ position: 'absolute', width: 130, height: 130, right: -38, top: -52, borderRadius: '48% 52% 60% 40% / 52% 42% 58% 48%', background: 'rgba(166,154,205,.17)' }} />
+                  <span style={{ position: 'relative', display: 'block', fontSize: 9.5, letterSpacing: '.15em', color: '#A69ACD' }}>{nextDiscovery.deeper ? 'DEEPER REFLECTION' : `${nextDiscovery.questions} QUESTIONS · ${nextDiscovery.minutes} MIN`}</span>
+                  <span style={{ position: 'relative', display: 'block', marginTop: 9, maxWidth: 270, fontFamily: "'Playfair Display', serif", fontSize: 23, lineHeight: 1.25, color: '#2F4A3F' }}>{nextDiscovery.title}</span>
+                  <span style={{ position: 'relative', display: 'block', marginTop: 9, fontSize: 12.5, lineHeight: 1.5, color: '#2F4A3F' }}>{nextDiscovery.note}</span>
+                  <span style={{ position: 'relative', display: 'block', marginTop: 15, fontSize: 12, color: '#A69ACD' }}>Explore →</span>
+                </button>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button onClick={conversationAction?.onGo} style={{ minHeight: 132, padding: '17px 16px', borderRadius: 20, border: '1px solid #DDEAE6', background: '#FFFFFF', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>

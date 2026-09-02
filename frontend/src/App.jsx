@@ -30,7 +30,7 @@ const initialState = {
   turnCount: 0, readyToComplete: false, categoriesCovered: [],
   signals: [], readiness: 0, narrative: '', insight: '', newSignals: [], hasExistingBlueprint: false, wasFollowUp: false,
   discoveryId: DEFAULT_DISCOVERY_ID, discoveryTitle: '', discoveryReturnScreen: 'home', discoveryLoading: false,
-  questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [],
+  questions: [], dqIdx: 0, answers: {}, completedDiscoveries: [], suggestedDiscoveryId: null,
   discoveryDone: false, discoverySaving: false, discoverySaveError: false, convoCompleted: false,
   editing: null, editLabel: '', editStrength: 'preference',
   plansOpen: false, inviteOpen: false, copied: false,
@@ -87,6 +87,20 @@ export default function App() {
     const el = chatEndRef.current;
     if (el && el.parentElement) el.parentElement.scrollTop = el.parentElement.scrollHeight;
   }, [s.messages, s.thinking]);
+  // Keep the Home "Discover something new" suggestion pointed at a Discovery
+  // the user hasn't completed yet — re-pick only when the current pick is
+  // stale (already done, or none chosen yet); null once every Discovery is done.
+  useEffect(() => {
+    const notDone = DISCOVERY_LIBRARY.filter((d) => !s.completedDiscoveries.includes(d.id));
+    if (notDone.length === 0) {
+      if (s.suggestedDiscoveryId !== null) patch({ suggestedDiscoveryId: null });
+      return;
+    }
+    if (s.suggestedDiscoveryId && notDone.some((d) => d.id === s.suggestedDiscoveryId)) return;
+    const pick = notDone[Math.floor(Math.random() * notDone.length)];
+    patch({ suggestedDiscoveryId: pick.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.completedDiscoveries]);
 
   const go = (screen) => () => patch({ screen, error: null });
   const goLegal = (legalSection) => () => patch({ screen: 'legal', legalSection, error: null });
@@ -266,10 +280,10 @@ export default function App() {
   ].map((st) => ({ ...st, mark: st.done ? '✓' : '', ring: st.done ? SAGE : '#DDEAE6', fill: st.done ? SAGE : 'transparent' }));
   const refinementActions = [
     { key: 'talk', title: 'Talk to Anaphora', note: 'Add nuance about you or the person you’re looking for', cta: 'Continue', onGo: resumeConversation },
-    { key: 'discover', title: 'Explore another Discovery', note: 'Reflect on chemistry, affection, values and everyday life', cta: 'Discover', onGo: go('convos') },
     { key: 'friend', title: 'Ask someone who knows you well', note: 'A different perspective can reveal patterns you might not notice', cta: 'Ask a friend', onGo: go('friends') },
   ];
   const discoveries = DISCOVERY_LIBRARY.map((d) => ({ ...d, done: s.completedDiscoveries.includes(d.id) }));
+  const nextDiscovery = DISCOVERY_LIBRARY.find((d) => d.id === s.suggestedDiscoveryId) || null;
 
   const q = s.questions[s.dqIdx] || { id: '_none', prompt: '', options: [] };
   const ans = s.answers[q.id];
@@ -309,13 +323,13 @@ export default function App() {
     case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} turnCount={s.turnCount} readyToComplete={s.readyToComplete} isFollowUp={s.hasExistingBlueprint} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
     case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} goHome={go('home')} groups={groups} isFollowUp={s.wasFollowUp} />; break;
     case 'blueprint': screenEl = <Blueprint goHome={go('home')} groups={groups} signalCount={s.signals.length} narrative={s.narrative} />; break;
-    case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} />; break;
+    case 'home': screenEl = <Home readiness={readiness} readinessHeadline={readinessCopy[0]} readinessSub={readinessCopy[1]} insight={s.insight} steps={steps} openPlans={openPlans} goBlueprint={go('blueprint')} signalCount={s.signals.length} discoverySaving={s.discoverySaving} discoverySaveError={s.discoverySaveError} retryDiscovery={retryDiscovery} postMatchMode={postMatchMode} refinementActions={refinementActions} nextDiscovery={nextDiscovery} startDiscovery={startDiscovery} />; break;
     case 'convos': screenEl = <Convos convoStatus={s.convoCompleted ? 'Completed · ' + s.turnCount + ' turns' : (s.messages.length ? 'In progress' : 'Not started')} convoCta={s.convoCompleted ? 'Continue' : (s.messages.length ? 'Resume' : 'Start')} resumeConversation={resumeConversation} discoveries={discoveries} startDiscovery={startDiscovery} />; break;
     case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Choose the most fitting'} dqNextBg={answered ? SAGE : '#F2EDE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
     case 'friends': screenEl = <Friends openInvite={openInvite} />; break;
-    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
+    case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} groups={groups} resumeConversation={resumeConversation} />; break;
     default: screenEl = null;
   }
 

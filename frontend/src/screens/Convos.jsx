@@ -21,7 +21,7 @@ export default function Convos({ convoStatus, convoCta, resumeConversation, disc
 
       <div style={{ marginTop: 32, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>DISCOVERIES</div>
-        <div style={{ fontSize: 11, color: '#A69ACD' }}>Go a little deeper</div>
+        <div style={{ fontSize: 11, color: '#A69ACD' }}>GO A LITTLE DEEPER</div>
       </div>
 
       <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
