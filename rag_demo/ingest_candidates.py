@@ -33,17 +33,26 @@ _BACKEND_DIR = Path(__file__).resolve().parent.parent / "anaphora_backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
+# Sized with headroom above the default -n 50 pool (~45% male, ~45% female,
+# ~10% nonbinary — see GENDER_WEIGHTS) so a normal run doesn't need to reuse
+# a name at all; _assign_demographics still cycles the pool if it ever runs
+# out rather than erroring.
 FIRST_NAMES = {
     "female": [
         "Mia", "Sofia", "Amara", "Lena", "Priya", "Chloe", "Nadia", "Elena",
         "Yuki", "Zara", "Ines", "Camille", "Aisha", "Noor", "Freya",
+        "Maya", "Isla", "Naomi", "Leila", "Talia", "Ana", "Hana", "Selin",
+        "Mira", "Ida", "Wren", "Odette", "Marisol", "Thandiwe", "Keiko",
     ],
     "male": [
         "Liam", "Diego", "Kai", "Omar", "Theo", "Jamal", "Lucas", "Arjun",
         "Felix", "Ravi", "Noah", "Idris", "Mateo", "Sami", "Anton",
+        "Ezra", "Amir", "Hugo", "Kenji", "Malik", "Tomas", "Gabriel", "Emir",
+        "Rafael", "Bilal", "Soren", "Elias", "Nikolai", "Cyrus", "Tariq",
     ],
     "nonbinary": [
         "River", "Sasha", "Jules", "Rowan", "Kit", "Noa", "Ari", "Quinn",
+        "Remy", "Skylar", "Indigo", "Tobin",
     ],
 }
 
