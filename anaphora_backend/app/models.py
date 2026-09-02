@@ -5,7 +5,7 @@ directly, so the schema is traceable back to the spec.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, JSON, Text, Boolean
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -113,3 +113,54 @@ class DiscoveryResponse(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="discovery_responses")
+
+
+class FriendInvite(Base):
+    """One single-use invite link (PRD sections 16-18). id doubles as the
+    unguessable token embedded in the shared link — no separate token
+    column needed. The friend never needs an Anaphora account."""
+    __tablename__ = "friend_invites"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"))
+    status = Column(String, default="pending")  # pending | answered
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class FriendResponse(Base):
+    """A friend's completed contribution. raw_answers is the friend's own
+    words — PRD section 18 promises the inviting user never sees them
+    verbatim, so it is never returned by any authenticated endpoint. Only
+    the paraphrased narrative and structured FriendSignals reach the user,
+    and only once they explicitly accept each one (PRD section 21)."""
+    __tablename__ = "friend_responses"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    invite_id = Column(String, ForeignKey("friend_invites.id"))
+    friend_name = Column(String)
+    raw_answers = Column(JSON)  # {question_id: answer} — internal extraction input only
+    narrative = Column(Text, nullable=True)
+    reviewed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    invite = relationship("FriendInvite")
+
+
+class FriendSignal(Base):
+    """A candidate Blueprint signal extracted from one friend's answers.
+    Stays separate from BlueprintSignal until the user explicitly accepts
+    it — friend input is never added automatically."""
+    __tablename__ = "friend_signals"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    response_id = Column(String, ForeignKey("friend_responses.id"))
+    perspective = Column(String)  # "ME" | "IDEAL_PARTNER"
+    category = Column(String)
+    label = Column(String)
+    strength = Column(String, default="preference")
+    evidence_text = Column(Text, nullable=True)  # a paraphrase, never a verbatim quote
+    status = Column(String, default="pending")  # pending | accepted | dismissed
+
+    response = relationship("FriendResponse")

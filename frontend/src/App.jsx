@@ -15,10 +15,11 @@ import Discovery from './screens/Discovery';
 import Insight from './screens/Insight';
 import Matches from './screens/Matches';
 import Friends from './screens/Friends';
+import FriendReview from './screens/FriendReview';
 import Profile from './screens/Profile';
 import { apiCall, getOrCreateUserId, TIMEOUT_CHAT_REPLY, TIMEOUT_EXTRACTION, TIMEOUT_INSIGHT, TIMEOUT_MATCHES } from './api';
 import { mockReadiness } from './readiness';
-import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE, DISCOVERY_LIBRARY } from './data';
+import { BASE_CATEGORIES, GROUP_DEFS, STRENGTHS, STRENGTH_STYLE, DISCOVERY_LIBRARY, FRIEND_INVITE_LIMIT } from './data';
 import { LAV, SAGE } from './theme';
 
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
@@ -39,6 +40,10 @@ const initialState = {
   preferencesSaved: false, preferencesSaving: false, preferencesError: null,
   matches: [], matchesLoading: false, matchesLoaded: false, matchesReady: null, hasVisitedReadyMatches: false,
   legalSection: 'privacy', error: null,
+  name: '',
+  friends: [], inviteCreating: false, inviteToken: null, inviteError: null,
+  friendReviewInviteId: null, friendReview: null, friendReviewLoading: false, friendReviewSelected: [],
+  friendCommitting: false, friendCommitted: false, friendAddedCount: 0,
 };
 
 export default function App() {
@@ -82,6 +87,12 @@ export default function App() {
         patch({ completedDiscoveries: completed, discoveryDone: completed.includes(DEFAULT_DISCOVERY_ID) });
       }
     });
+    api('GET', '/profile').then((r) => {
+      if (r && r.name) patch({ name: r.name });
+    });
+    api('GET', '/friends').then((r) => {
+      if (Array.isArray(r)) patch({ friends: r });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -108,6 +119,14 @@ export default function App() {
   const goBlueprintAboutYou = () => patch({ screen: 'blueprint', blueprintScrollAboutYou: true, error: null });
   const clearBlueprintScroll = () => patch({ blueprintScrollAboutYou: false });
 
+  const onName = (e) => patch({ name: e.target.value });
+  // Collected once, up front, so a friend's invite link can say "<Name>
+  // trusts your judgment" instead of generic copy.
+  const beginWithName = async () => {
+    if (!s.name.trim()) return;
+    await api('PATCH', '/profile', { name: s.name.trim() });
+    beginConversation();
+  };
   const beginConversation = async () => {
     patch({ screen: 'chat', messages: [], turnCount: 0, readyToComplete: false, categoriesCovered: [], convoId: null, convoCompleted: false, error: null });
     const r = await api('POST', '/conversation/start');
@@ -235,6 +254,32 @@ export default function App() {
     else patch({ preferencesSaving: false, preferencesSaved: false, preferencesError: "We couldn't save your preferences. Please try again." });
   };
 
+  const openFriendReview = async (inviteId) => {
+    patch({ screen: 'friendReview', friendReviewInviteId: inviteId, friendReviewLoading: true, friendReview: null, friendReviewSelected: [], friendCommitted: false, friendAddedCount: 0, error: null });
+    const r = await api('GET', '/friends/' + inviteId + '/review');
+    if (r) patch({ friendReview: r, friendReviewLoading: false });
+    else patch({ friendReviewLoading: false, error: { screen: 'friendReview', message: "Couldn't load this friend's answers." } });
+  };
+  const toggleFriendSignal = (signalId) => patch((prev) => ({
+    friendReviewSelected: prev.friendReviewSelected.includes(signalId)
+      ? prev.friendReviewSelected.filter((id) => id !== signalId)
+      : prev.friendReviewSelected.concat(signalId),
+  }));
+  const commitFriendReview = async () => {
+    if (s.friendCommitting || !s.friendReviewInviteId) return;
+    patch({ friendCommitting: true, error: null });
+    const r = await api('POST', '/friends/' + s.friendReviewInviteId + '/commit', { accepted_signal_ids: s.friendReviewSelected });
+    if (r) {
+      patch((prev) => ({
+        friendCommitting: false, friendCommitted: true, friendAddedCount: r.added_signals.length,
+        signals: prev.signals.concat(r.added_signals), readiness: r.readiness_pct,
+        friends: prev.friends.map((f) => (f.id === prev.friendReviewInviteId ? { ...f, reviewed: true } : f)),
+      }));
+    } else {
+      patch({ friendCommitting: false, error: { screen: 'friendReview', message: "Couldn't save your choices. Please try again." } });
+    }
+  };
+
   const resetAll = () => {
     const newUid = crypto.randomUUID ? crypto.randomUUID() : 'u-' + Date.now();
     try { localStorage.setItem('anaphora_uid', newUid); } catch (e) { /* ignore */ }
@@ -244,9 +289,14 @@ export default function App() {
   const toggleFrame = () => patch((prev) => ({ framed: !prev.framed }));
   const openPlans = () => patch({ plansOpen: true });
   const closePlans = () => patch({ plansOpen: false });
-  const openInvite = () => patch({ inviteOpen: true, copied: false });
+  const openInvite = async () => {
+    patch({ inviteOpen: true, copied: false, inviteCreating: true, inviteToken: null, inviteError: null });
+    const r = await api('POST', '/friends/invite');
+    if (r) patch({ inviteCreating: false, inviteToken: r.token });
+    else patch({ inviteCreating: false, inviteError: "Couldn't create your invite link. Please try again." });
+  };
   const closeInvite = () => patch({ inviteOpen: false });
-  const inviteLink = 'anaphora.app/f/' + String(uidRef.current || 'demo').replace(/-/g, '').slice(0, 8);
+  const inviteLink = s.inviteToken ? window.location.origin + '/?f=' + s.inviteToken : '';
   const copyInvite = async () => {
     try { await navigator.clipboard.writeText(inviteLink); }
     catch (e) {
@@ -321,7 +371,7 @@ export default function App() {
 
   let screenEl = null;
   switch (s.screen) {
-    case 'welcome': screenEl = <Welcome onBegin={beginConversation} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} />; break;
+    case 'welcome': screenEl = <Welcome onBegin={beginWithName} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} name={s.name} onName={onName} canBegin={!!s.name.trim()} />; break;
     case 'legal': screenEl = <Legal goBack={go('welcome')} section={s.legalSection} />; break;
     case 'chat': screenEl = <Chat goHome={go('home')} messages={s.messages} thinking={s.thinking} categoriesCoveredCount={s.categoriesCovered.length} totalCategories={BASE_CATEGORIES.length} draft={s.draft} onDraft={onDraft} onDraftKey={onDraftKey} sendMessage={sendMessage} turnCount={s.turnCount} readyToComplete={s.readyToComplete} isFollowUp={s.hasExistingBlueprint} completeConversation={completeConversation} chatEndRef={chatEndRef} setDraft={setDraft} error={s.error && s.error.screen === 'chat' ? s.error.message : null} onRetryStart={!s.convoId ? beginConversation : null} />; break;
     case 'enough': screenEl = <Enough signalCount={s.signals.length} goBlueprint={go('blueprint')} goHome={go('home')} groups={groups} isFollowUp={s.wasFollowUp} />; break;
@@ -331,7 +381,8 @@ export default function App() {
     case 'discovery': screenEl = <Discovery discoveryUnavailable={!s.discoveryLoading && s.questions.length === 0} discoveryBack={discoveryBack} discoveryProgress={s.questions.length ? Math.round(((s.dqIdx + (answered ? 1 : 0)) / s.questions.length) * 100) + '%' : '0%'} discoveryCounter={s.questions.length ? (s.dqIdx + 1) + '/' + s.questions.length : ''} discoveryTitle={s.discoveryTitle} dqPrompt={q.prompt} dqIsChoice={!isSpectrum && !isText} dqOptions={dqOptions} dqIsSpectrum={isSpectrum} dqLeft={isSpectrum ? q.spectrum[0] : ''} dqRight={isSpectrum ? q.spectrum[1] : ''} dqValue={sv} onSpectrum={onSpectrum} dqReading={reading} dqIsText={isText} dqTextValue={isText ? String(ans || '') : ''} onTextAnswer={onTextAnswer} dqPlaceholder={q.placeholder} dqOtherSelected={otherSelected} dqOtherValue={otherValue} onOtherAnswer={onOtherAnswer} dqNextLabel={answered ? (last ? 'Add to my Blueprint' : 'Next') : 'Choose the most fitting'} dqNextBg={answered ? SAGE : '#F2EDE6'} dqNextFg={answered ? '#FFFFFF' : '#2F4A3F'} dqNextDisabled={!answered} discoveryNext={discoveryNext} error={null} />; break;
     case 'insight': screenEl = <Insight insight={s.insight} newSignals={s.newSignals} readiness={readiness} goHome={go('home')} />; break;
     case 'matches': screenEl = <Matches matches={s.matches} loading={s.matchesLoading} ready={s.matchesReady} error={s.error && s.error.screen === 'matches' ? s.error.message : null} onRetry={fetchMatches} goHome={go('home')} />; break;
-    case 'friends': screenEl = <Friends openInvite={openInvite} />; break;
+    case 'friends': screenEl = <Friends invites={s.friends} openFriendReview={openFriendReview} openInvite={openInvite} inviteCount={s.friends.length} inviteLimit={FRIEND_INVITE_LIMIT} />; break;
+    case 'friendReview': screenEl = <FriendReview goBack={go('friends')} friendName={s.friendReview?.friend_name} narrative={s.friendReview?.narrative || ''} signals={s.friendReview?.signals || []} selectedIds={s.friendReviewSelected} onToggleSignal={toggleFriendSignal} onCommit={commitFriendReview} committing={s.friendCommitting} error={s.error && s.error.screen === 'friendReview' ? s.error.message : null} committed={s.friendCommitted} addedCount={s.friendAddedCount} loading={s.friendReviewLoading} />; break;
     case 'profile': screenEl = <Profile gender={s.gender} onPickGender={pickGender} ageMin={s.ageMin} ageMax={s.ageMax} onAgeMin={onAgeMin} onAgeMax={onAgeMax} onSavePreferences={savePreferences} preferencesSaving={s.preferencesSaving} preferencesSaved={s.preferencesSaved} preferencesError={s.preferencesError} readiness={readiness} breakdownMet={br.met} openPlans={openPlans} goPrivacy={goLegal('privacy')} goTerms={goLegal('terms')} signalCount={s.signals.length} goBlueprint={goBlueprintAboutYou} />; break;
     default: screenEl = null;
   }
@@ -342,7 +393,7 @@ export default function App() {
       {TAB_SCREENS.includes(s.screen) && <TabBar activeScreen={s.screen} onGo={(key) => (key === 'matches' ? goMatches() : go(key)())} />}
       {s.editing && <SignalEditSheet editLabel={s.editLabel} onEditLabel={onEditLabel} closeEdit={closeEdit} saveEdit={saveEdit} strengthOptions={strengthOptions} />}
       {s.plansOpen && <PlansModal closePlans={closePlans} />}
-      {s.inviteOpen && <InviteLinkSheet closeInvite={closeInvite} copyInvite={copyInvite} inviteLink={inviteLink} copied={s.copied} />}
+      {s.inviteOpen && <InviteLinkSheet closeInvite={closeInvite} copyInvite={copyInvite} inviteLink={inviteLink} copied={s.copied} creating={s.inviteCreating} error={s.inviteError} />}
     </PhoneFrame>
   );
 }

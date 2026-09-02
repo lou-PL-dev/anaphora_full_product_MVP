@@ -5,6 +5,7 @@ Pydantic schemas.
   Operation B (PRD section 31) — its shape follows the PRD's own JSON
   example directly.
 """
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -208,4 +209,75 @@ class DiscoveryResponseIn(BaseModel):
 class DiscoveryResultResponse(BaseModel):
     insight_text: str
     new_signals: list[BlueprintSignalOut]
+    readiness_pct: int
+
+
+class ProfileOut(BaseModel):
+    name: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class FriendInviteCreateResponse(BaseModel):
+    token: str
+    invite_count: int
+    invite_limit: int
+
+
+class FriendInviteInfo(BaseModel):
+    inviter_name: str
+    questions: list[dict]
+
+
+class FriendQuestionAnswer(BaseModel):
+    question_id: str
+    response: str = Field(min_length=1)
+
+
+class FriendRespondRequest(BaseModel):
+    friend_name: str = Field(min_length=1, max_length=60)
+    answers: list[FriendQuestionAnswer]
+
+
+class FriendExtractionResult(BaseModel):
+    narrative: str = Field(description="A short paraphrase — never a verbatim quote from the friend")
+    observations: list[ConversationObservation] = Field(default_factory=list)
+
+
+class FriendSignalOut(BaseModel):
+    id: str
+    perspective: str
+    category: str
+    label: str
+    strength: str
+    evidence_text: Optional[str] = None
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class FriendInviteListItem(BaseModel):
+    id: str
+    status: str  # pending | answered
+    friend_name: Optional[str] = None
+    reviewed: bool = False
+    created_at: datetime
+
+
+class FriendReviewOut(BaseModel):
+    invite_id: str
+    friend_name: str
+    narrative: str
+    signals: list[FriendSignalOut]
+
+
+class FriendCommitRequest(BaseModel):
+    accepted_signal_ids: list[str] = Field(default_factory=list)
+
+
+class FriendCommitResponse(BaseModel):
+    added_signals: list[BlueprintSignalOut]
     readiness_pct: int

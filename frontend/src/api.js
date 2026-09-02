@@ -63,3 +63,29 @@ export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QU
     return null;
   }
 }
+
+/**
+ * Same contract as apiCall, but for the friend-invite endpoints a friend
+ * opens with no Anaphora account and no device identity — no
+ * X-Anaphora-User-Id header is sent. Returns { status } alongside the body
+ * so callers can tell an expired/used link (410) apart from a generic
+ * failure.
+ */
+export async function apiCallPublic(method, path, body, timeoutMs = TIMEOUT_QUICK) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(API_BASE + path, {
+      method,
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    clearTimeout(timer);
+    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    return { status: res.status, ok: res.ok, data };
+  } catch (e) {
+    clearTimeout(timer);
+    return { status: 0, ok: false, data: null };
+  }
+}

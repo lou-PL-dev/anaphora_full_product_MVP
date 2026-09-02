@@ -1,10 +1,9 @@
-// Fixed lookup tables the UI renders from, plus STATIC_FRIENDS (the Friends
-// tab is frontend-only per the PRD — no backend endpoint). Matches is REAL
-// data now (see App.jsx::fetchMatches / anaphora_backend's /matches RAG
-// endpoint), not static content. There is deliberately no mock/demo
-// fallback content here: if the backend or an LLM call is unreachable, the
-// app surfaces a real error instead of substituting fabricated
-// conversation, signals, insights, or matches.
+// Fixed lookup tables the UI renders from. Friends and Matches are both
+// REAL data (see App.jsx::fetchMatches and the /friends routes), not
+// static content. There is deliberately no mock/demo fallback content
+// here: if the backend or an LLM call is unreachable, the app surfaces a
+// real error instead of substituting fabricated conversation, signals,
+// insights, matches, or friend contributions.
 
 export const DISCOVERY_LIBRARY = [
   { id: 'feel_at_home', title: 'What makes you feel at home?', note: 'Closeness, reassurance and emotional needs', questions: 4, minutes: 2 },
@@ -66,6 +65,7 @@ export const TABS = [
   ['profile', 'You', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7'],
 ];
 
-export const STATIC_FRIENDS = [
-  { initial: 'L', name: 'Léa', rel: 'Sister', quote: "She's thoughtful, adventurous, and will make you laugh every day." },
-];
+// PRD section: Free tier gets up to 3 friend invitations (Anaphora+ is
+// unlimited — see PlansModal). Enforced authoritatively by the backend;
+// mirrored here only to gate/label the "Share invite link" button.
+export const FRIEND_INVITE_LIMIT = 3;
