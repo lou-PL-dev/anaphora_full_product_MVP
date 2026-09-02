@@ -2,13 +2,16 @@
 rag_demo — seeds the real `candidates` table (Postgres/pgvector only) for
 the reciprocal RAG matching feature.
 
-Each synthetic candidate now carries BOTH Blueprint perspectives:
+Each synthetic candidate carries BOTH Blueprint perspectives:
 - ME: who the candidate is
 - IDEAL_PARTNER: who the candidate wants
 
+It also carries deterministic demographic-preference metadata inside the
+existing JSON `signals` field. This lets the live matcher evaluate age/gender
+eligibility in both directions without adding demo-only database columns.
+
 Broad retrieval embeddings are still built from ME only, so candidate desires
-do not contaminate the first-pass search. The IDEAL_PARTNER side is consumed
-later by reciprocal reranking.
+or demographic preferences do not contaminate the first-pass semantic search.
 
 Requires:
   - OPENAI_API_KEY
@@ -51,6 +54,33 @@ PHOTO_FILES = {
 }
 
 GENDER_WEIGHTS = [("male", 0.45), ("female", 0.45), ("nonbinary", 0.10)]
+DEMOGRAPHIC_PREFERENCE_GENDERS = ["male", "female", "nonbinary", "other"]
+
+
+def _sample_demographic_preferences(rng: random.Random, age: int) -> dict:
+    """Small synthetic eligibility profile, independent from Blueprint traits.
+
+    The distribution is intentionally broad for the MVP candidate pool: it is
+    there to exercise reciprocal eligibility, not to model population-level
+    dating preferences.
+    """
+    if rng.random() < 0.15:
+        gender_preferences = ["everyone"]
+    else:
+        count = 2 if rng.random() < 0.35 else 1
+        gender_preferences = rng.sample(DEMOGRAPHIC_PREFERENCE_GENDERS, k=count)
+
+    age_min = max(18, age - rng.randint(6, 14))
+    age_max = min(70, age + rng.randint(8, 18))
+    if age_max < age_min:
+        age_max = age_min
+
+    return {
+        "kind": "demographic_preferences",
+        "gender_preferences": gender_preferences,
+        "age_min": age_min,
+        "age_max": age_max,
+    }
 
 
 def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
@@ -69,11 +99,13 @@ def _assign_demographics(rng: random.Random, n: int) -> list[dict]:
         name = pool[name_idx[gender] % len(pool)]
         name_idx[gender] += 1
         photo_url = photo_pools[gender].pop(0) if photo_pools[gender] else None
+        age = rng.randint(24, 42)
         demographics.append({
             "gender": gender,
             "name": name,
-            "age": rng.randint(24, 42),
+            "age": age,
             "photo_url": photo_url,
+            "demographic_preferences": _sample_demographic_preferences(rng, age),
         })
     return demographics
 
@@ -108,6 +140,7 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                 )
                 demo = demographics[i]
                 signal_dicts = [s.as_dict() for s in persona.signals]
+                signal_dicts.append(demo["demographic_preferences"])
                 embedding = embedder.embed_query(candidate_me_embedding_text(persona))
 
                 me_count = sum(1 for s in persona.signals if s.perspective == "ME")
@@ -124,9 +157,11 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                 ))
                 db.commit()
                 succeeded += 1
+                prefs = demo["demographic_preferences"]
                 print(
                     f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) "
-                    f"— ME {me_count} / IDEAL_PARTNER {ideal_count} signals"
+                    f"— ME {me_count} / IDEAL_PARTNER {ideal_count} signals "
+                    f"— open to {','.join(prefs['gender_preferences'])} {prefs['age_min']}–{prefs['age_max']}"
                 )
             except Exception as e:
                 db.rollback()
