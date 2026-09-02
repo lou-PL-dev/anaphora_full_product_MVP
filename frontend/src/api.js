@@ -1,31 +1,11 @@
 // Talks to the FastAPI backend (anaphora_backend). Every request carries the
-// anonymous per-device identity header the backend expects (see
-// anaphora_backend/app/auth.py). A failed call returns null — callers
-// surface a real error rather than substituting fabricated content (see
-// App.jsx).
-//
-// Defaults to the deployed Render backend so the Netlify build works with
-// no env var configured. Override with VITE_API_BASE for local dev against
-// `uvicorn app.main:app --reload` (defaults to :8000) — see .env.example.
+// anonymous per-device identity header the backend expects.
 export const API_BASE = import.meta.env.VITE_API_BASE || 'https://anaphora-app.onrender.com';
 
-// Different endpoints need very different timeouts. A plain CRUD call
-// (start a conversation, patch a signal, fetch the discovery structure) is
-// normally fast, but any of these can be the FIRST request of a session —
-// and the deployed backend (Render free tier) spins down after ~15 minutes
-// idle and takes up to ~50s to wake back up on the next request. A short
-// timeout here would misreport a waking-up backend as offline. A
-// conversational turn is one LLM completion. Extraction
-// (/conversation/complete) asks the LLM for STRUCTURED output across 10
-// categories at once — noticeably slower than a normal chat reply — and
-// needs the most headroom.
 export const TIMEOUT_QUICK = 45000;
 export const TIMEOUT_CHAT_REPLY = 20000;
 export const TIMEOUT_INSIGHT = 45000;
 export const TIMEOUT_EXTRACTION = 45000;
-// /matches does one embedding call plus one structured-output LLM call
-// (see matching_chain.generate_match_explanations) across several
-// candidates at once — similar shape to extraction, same headroom.
 export const TIMEOUT_MATCHES = 45000;
 
 const UID_KEY = 'anaphora_uid';
@@ -40,11 +20,6 @@ export function getOrCreateUserId() {
   return uid;
 }
 
-/**
- * Returns the parsed JSON body on success, or null on any failure (network
- * error, timeout, non-2xx) — callers surface a real error rather than
- * substituting fabricated content (see App.jsx).
- */
 export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QUICK) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -57,20 +32,36 @@ export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QU
     });
     clearTimeout(timer);
     if (!res.ok) throw new Error(String(res.status));
-    return await res.json();
+    return res.status === 204 ? {} : await res.json();
   } catch (e) {
     clearTimeout(timer);
     return null;
   }
 }
 
-/**
- * Same contract as apiCall, but for the friend-invite endpoints a friend
- * opens with no Anaphora account and no device identity — no
- * X-Anaphora-User-Id header is sent. Returns { status } alongside the body
- * so callers can tell an expired/used link (410) apart from a generic
- * failure.
- */
+// Fire-and-forget product-research event. A tracking failure must never block
+// or alter the tester's actual product flow.
+export function trackEvent(userId, event, metadata = {}) {
+  if (!userId || !event) return;
+  fetch(API_BASE + '/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Anaphora-User-Id': userId },
+    body: JSON.stringify({ event, metadata }),
+  }).catch(() => {});
+}
+
+export async function adminApiCall(secret, path) {
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'X-Admin-Secret': secret },
+    });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 0, data: null };
+  }
+}
+
 export async function apiCallPublic(method, path, body, timeoutMs = TIMEOUT_QUICK) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
