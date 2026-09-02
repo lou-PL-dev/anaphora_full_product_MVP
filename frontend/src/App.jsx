@@ -24,6 +24,23 @@ import { LAV, SAGE } from './theme';
 
 const TAB_SCREENS = ['home', 'convos', 'matches', 'friends', 'profile'];
 const DEFAULT_DISCOVERY_ID = 'life_you_are_building';
+const introVisitedStorageKey = (uid) => `anaphora:intro-visited:${uid}`;
+
+const readIntroVisited = (uid) => {
+  try {
+    return localStorage.getItem(introVisitedStorageKey(uid)) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const rememberIntroVisited = (uid) => {
+  try {
+    localStorage.setItem(introVisitedStorageKey(uid), 'true');
+  } catch {
+    // The in-memory state still keeps the transition working for this session.
+  }
+};
 
 const initialState = {
   screen: 'welcome', framed: false, mode: 'checking',
@@ -59,6 +76,7 @@ export default function App() {
 
   useEffect(() => {
     uidRef.current = getOrCreateUserId();
+    if (readIntroVisited(uidRef.current)) patch({ hasVisitedReadyMatches: true });
     api('GET', '/discovery/' + DEFAULT_DISCOVERY_ID).then((r) => {
       if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || 'What kind of life are you building?' });
     });
@@ -135,10 +153,18 @@ export default function App() {
   const fetchMatches = async () => {
     patch({ matchesLoading: true, error: null });
     const r = await api('GET', '/matches', undefined, TIMEOUT_MATCHES);
-    if (r) patch((prev) => ({ matches: r.matches, matchesReady: r.ready, matchesLoading: false, matchesLoaded: r.ready, hasVisitedReadyMatches: prev.hasVisitedReadyMatches || r.ready }));
+    if (r) {
+      if (r.ready) rememberIntroVisited(uidRef.current);
+      patch((prev) => ({ matches: r.matches, matchesReady: r.ready, matchesLoading: false, matchesLoaded: r.ready, hasVisitedReadyMatches: prev.hasVisitedReadyMatches || r.ready }));
+    }
     else patch({ matchesLoading: false, error: { screen: 'matches', message: "Couldn't load your matches — check the backend is running, then try again." } });
   };
-  const goMatches = () => { patch({ screen: 'matches', error: null }); if (!s.matchesLoaded && !s.matchesLoading) fetchMatches(); else if (s.matchesReady) patch({ hasVisitedReadyMatches: true }); };
+  const goMatches = () => {
+    const shouldRememberVisit = s.readiness >= 100 || s.matchesReady === true;
+    if (shouldRememberVisit) rememberIntroVisited(uidRef.current);
+    patch((prev) => ({ screen: 'matches', error: null, hasVisitedReadyMatches: prev.hasVisitedReadyMatches || shouldRememberVisit }));
+    if (!s.matchesLoaded && !s.matchesLoading) fetchMatches();
+  };
 
   const openEdit = (sig) => () => patch({ editing: sig, editLabel: sig.label, editStrength: sig.strength });
   const closeEdit = () => patch({ editing: null });

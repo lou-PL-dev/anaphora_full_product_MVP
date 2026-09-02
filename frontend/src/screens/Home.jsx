@@ -127,6 +127,12 @@ export default function Home({ readiness, readinessHeadline, readinessSub, insig
 
         {postMatchMode ? (
           <>
+            <button onClick={goIntro} style={{ width: '100%', padding: '15px 18px', border: '1px solid rgba(166,154,205,.45)', borderRadius: 18, background: '#FFFFFF', color: '#2F4A3F', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', boxShadow: '0 7px 20px rgba(47,74,63,.06)' }}>
+              <span style={{ width: 34, height: 34, flex: 'none', borderRadius: '50%', background: 'rgba(166,154,205,.18)', display: 'grid', placeItems: 'center', color: '#A69ACD', fontSize: 16 }}>♡</span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>See who Anaphora found</span>
+              <span style={{ color: '#A69ACD', fontSize: 15 }}>→</span>
+            </button>
+
             {nextDiscovery && (
               <div>
                 <div style={{ fontSize: 10.5, letterSpacing: '.15em', color: '#2F4A3F', marginBottom: 9 }}>DISCOVER SOMETHING NEW</div>
