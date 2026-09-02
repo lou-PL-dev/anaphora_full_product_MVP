@@ -61,19 +61,28 @@ def synthesize_insight(responses: dict[str, str]) -> str:
 
 def responses_to_signals(responses: dict[str, str]) -> list[SignalItem]:
     """Simple deterministic mapping for MVP — richer inference can come later.
-    Any spectrum answer becomes a lifestyle preference signal; the free
-    Saturday-scenario choice becomes a lifestyle signal too."""
+    Choice answers may arrive as legacy option ids or as the human-readable
+    labels now persisted by the frontend; both map to the same Blueprint signal.
+    """
     signals = []
-    label_map = {
+    option_signal_labels = {
         "a": "Home-oriented, family-centered",
         "b": "Spontaneous, adventurous",
         "c": "Balanced — quiet creativity with close friends",
         "d": "Highly social, energized by hosting",
+        "Breakfast at home, kids running around, friends over later": "Home-oriented, family-centered",
+        "Deciding spontaneously whether to take the train to Copenhagen": "Spontaneous, adventurous",
+        "Slow morning, creative project, dinner with a few close friends": "Balanced — quiet creativity with close friends",
+        "Hosting 20 people tonight": "Highly social, energized by hosting",
     }
     if "saturday_2032" in responses:
-        label = label_map.get(responses["saturday_2032"], responses["saturday_2032"])
-        signals.append(SignalItem(label=label, strength=Strength.preference,
-                                   evidence_text=f"Chose: {responses['saturday_2032']}"))
+        raw = responses["saturday_2032"]
+        label = option_signal_labels.get(raw, raw)
+        signals.append(SignalItem(
+            label=label,
+            strength=Strength.preference,
+            evidence_text=f"Chose: {raw}",
+        ))
     for key in ("roots_freedom", "comfort_adventure", "togetherness_independence"):
         if key in responses:
             signals.append(SignalItem(
