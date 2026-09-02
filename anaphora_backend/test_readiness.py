@@ -5,6 +5,7 @@ No OpenAI calls or production database are involved.
 """
 import os
 import uuid
+from datetime import date
 
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 
@@ -34,6 +35,7 @@ def _user(db, *, essentials=False, preferences=False):
     user = User(id=f"u-{uuid.uuid4()}")
     if essentials:
         user.gender = "woman"
+        user.birth_date = date(1988, 10, 17)
         user.age = 37
     if preferences:
         user.gender_preference = "men,nonbinary"
@@ -114,6 +116,15 @@ def test_both_introduction_essentials_are_twenty_and_met():
     assert score == 20
     assert breakdown["introduction_essentials"]["earned"] == 20
     assert breakdown["introduction_essentials"]["met"] is True
+    db.close()
+
+
+def test_age_without_birth_date_does_not_unlock_your_essentials():
+    db = _new_db()
+    user = User(id=f"u-{uuid.uuid4()}", gender="woman", age=37)
+    db.add(user)
+    db.commit()
+    assert compute_readiness(db, user.id)[0] == 0
     db.close()
 
 
