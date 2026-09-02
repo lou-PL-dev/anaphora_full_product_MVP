@@ -6,9 +6,10 @@ from ..auth import get_current_user
 from ..models import User, Conversation, BlueprintSignal
 from ..schemas import (
     ConversationStartResponse, ConversationMessageRequest, ConversationMessageResponse,
-    ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut, PerspectiveBlueprint,
+    ConversationCompleteRequest, ConversationCompleteResponse, BlueprintSignalOut,
+    PerspectiveBlueprint, IdealPartnerBlueprint, RelationshipBlueprint,
 )
-from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete, side_ready
+from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete
 from ..chains.extraction_chain import extract_blueprint
 from ..chains.input_segmentation import is_long_input
 from ..chains.long_input_chain import digest_long_input, format_processing_summary
@@ -26,8 +27,8 @@ OPENING_PROMPT_ME_FOCUSED = (
 @router.post("/start", response_model=ConversationStartResponse)
 def start_conversation(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
-    known_me, known_ideal = category_coverage(signals)
-    opening = OPENING_PROMPT_ME_FOCUSED if side_ready(known_ideal) and not side_ready(known_me) else OPENING_PROMPT
+    known_me, known_ideal, known_us = category_coverage(signals)
+    opening = OPENING_PROMPT_ME_FOCUSED if len(known_ideal) >= 3 and len(known_me) < 3 else OPENING_PROMPT
 
     convo = Conversation(user_id=user.id, messages=[{"role": "assistant", "content": opening}])
     db.add(convo)
@@ -49,7 +50,7 @@ def send_message(
         raise HTTPException(400, "Conversation already completed")
 
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
-    known_me, known_ideal = category_coverage(signals)
+    known_me, known_ideal, known_us = category_coverage(signals)
 
     history = list(convo.messages)
     user_message = {"role": "user", "content": body.message}
@@ -59,7 +60,7 @@ def send_message(
         user_message["processing_summary"] = format_processing_summary(long_digest)
     history.append(user_message)
 
-    turn = converse(history, known_me=known_me, known_ideal=known_ideal)
+    turn = converse(history, known_me=known_me, known_ideal=known_ideal, known_us=known_us)
 
     # Canonical machine memory lives on the original user turn. Long messages
     # use the chunk-aware digest observations; ordinary messages reuse the
@@ -68,7 +69,11 @@ def send_message(
     observations = long_digest.observations if long_digest and long_digest.observations else turn.observations
     user_message["observations"] = [obs.model_dump(mode="json") for obs in observations]
 
-    history.append({"role": "assistant", "content": turn.reply})
+    history.append({
+        "role": "assistant",
+        "content": turn.reply,
+        "question_target": turn.next_question_target.value if turn.next_question_target else None,
+    })
     convo.messages = history
     db.add(convo)
     db.commit()
@@ -76,7 +81,7 @@ def send_message(
     return ConversationMessageResponse(
         reply=turn.reply,
         turn_count=user_turn_count(history),
-        ready_to_complete=is_ready_to_complete(history, turn.coverage_fields, known_me=known_me, known_ideal=known_ideal),
+        ready_to_complete=is_ready_to_complete(history, turn.coverage_fields),
         categories_covered=turn.coverage_fields,
     )
 
@@ -98,32 +103,43 @@ def complete_conversation(
     result = extract_blueprint(convo.messages)
     created: list[BlueprintSignal] = []
 
+    source_key = f"conversation:{convo.id}"
+
     def _store(perspective: str, category: str, items) -> None:
         if not items:
             return
-        db.query(BlueprintSignal).filter(
-            BlueprintSignal.user_id == user.id,
-            BlueprintSignal.source == "conversation",
-            BlueprintSignal.perspective == perspective,
-            BlueprintSignal.category == category,
-        ).delete()
+        existing = {
+            (signal.label or "").strip().casefold()
+            for signal in db.query(BlueprintSignal).filter(
+                BlueprintSignal.user_id == user.id,
+                BlueprintSignal.perspective == perspective,
+                BlueprintSignal.category == category,
+            ).all()
+        }
         for item in items:
+            key = item.label.strip().casefold()
+            if not key or key in existing:
+                continue
             signal = BlueprintSignal(
                 user_id=user.id,
                 perspective=perspective,
                 category=category,
                 label=item.label,
                 strength=item.strength.value,
-                source="conversation",
+                source=source_key,
                 evidence_text=item.evidence_text,
                 confidence=item.confidence,
             )
             db.add(signal)
             created.append(signal)
+            existing.add(key)
 
-    for category in PerspectiveBlueprint.model_fields:
+    for category in IdealPartnerBlueprint.model_fields:
         _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
+    for category in PerspectiveBlueprint.model_fields:
         _store("ME", category, getattr(result.me, category))
+    for category in RelationshipBlueprint.model_fields:
+        _store("US", category, getattr(result.us, category))
 
     # Narrative is a human-readable projection of this reconciled state. A
     # follow-up conversation adds another projection without deleting earlier

@@ -16,31 +16,31 @@ export const DISCOVERY_LIBRARY = [
 ];
 
 export const WEIGHTS = {
-  ideal_partner_personality: [10, 'Who they are'],
-  ideal_partner_lifestyle: [10, 'How they live'],
-  ideal_partner_physical_type: [10, 'What draws you'],
-  ideal_partner_relationship_dynamic: [10, 'What you need from a relationship'],
-  ideal_partner_love_language: [10, 'How they connect'],
-  ideal_partner_dealbreakers: [10, 'Dealbreakers'],
-  about_you: [10, 'About you'],
-  discovery_completed: [15, 'A Discovery completed'],
-  basic_matching_preferences: [15, 'Basic matching preferences'],
+  introduction_essentials: [20, 'Introduction essentials'],
+  discovery_completed: [20, 'A Discovery completed'],
+  me_profile: [20, 'About you'],
+  ideal_partner_profile: [20, "Who you're looking for"],
+  us_profile: [20, 'What you want to build together'],
 };
 
 export const BASE_CATEGORIES = [
-  'personality', 'lifestyle', 'physical_type',
-  'relationship_dynamic', 'love_language', 'dealbreakers', 'about_you',
+  'me_personality', 'me_lifestyle', 'me_relationship_behavior', 'me_core_values',
+  'ideal_partner_personality', 'ideal_partner_lifestyle', 'ideal_partner_physical_type',
+  'us_relationship_shape', 'us_connection_affection', 'us_shared_direction', 'us_boundaries',
 ];
 
 export const GROUP_DEFS = [
-  ['IDEAL_PARTNER', 'personality', 'PERSONALITY', 'Who they are'],
-  ['IDEAL_PARTNER', 'lifestyle', 'LIFESTYLE', 'How they live'],
-  ['IDEAL_PARTNER', 'physical_type', 'PHYSICAL TYPE', 'What draws you'],
-  ['IDEAL_PARTNER', 'relationship_dynamic', 'RELATIONSHIP DYNAMIC', 'What you need'],
-  ['IDEAL_PARTNER', 'love_language', 'LOVE LANGUAGE', 'How they connect'],
-  ['IDEAL_PARTNER', 'dealbreakers', 'DEALBREAKERS', 'Non-negotiable'],
-  ['IDEAL_PARTNER', 'values', 'VALUES', 'What matters'],
-  ['ME', null, 'ABOUT YOU', 'What you revealed'],
+  ['ME', 'personality', 'MY PERSONALITY', 'ME'],
+  ['ME', 'lifestyle', 'HOW I LIVE', 'ME'],
+  ['ME', 'relationship_behavior', 'HOW I SHOW UP IN LOVE', 'ME'],
+  ['ME', 'core_values', 'WHAT GUIDES ME', 'ME'],
+  ['IDEAL_PARTNER', 'personality', 'WHO THEY ARE', 'YOU'],
+  ['IDEAL_PARTNER', 'lifestyle', 'HOW THEY LIVE', 'YOU'],
+  ['IDEAL_PARTNER', 'physical_type', 'WHAT DRAWS ME', 'YOU'],
+  ['US', 'relationship_shape', 'HOW WE WORK', 'US'],
+  ['US', 'connection_affection', 'HOW WE CONNECT', 'US'],
+  ['US', 'shared_direction', 'WHAT WE BUILD', 'US'],
+  ['US', 'boundaries', 'WHAT I CAN’T COMPROMISE ON', 'US'],
 ];
 
 export const STRENGTHS = [

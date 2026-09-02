@@ -25,7 +25,10 @@ def generate_reciprocal_candidate_persona(
     self_profile = generate_candidate_persona(rng, candidate_id, use_llm=use_llm)
     ideal_profile = generate_persona(rng, f"{candidate_id}-ideal", use_llm=use_llm)
 
-    ideal_signals = [signal for signal in ideal_profile.signals if signal.perspective == "IDEAL_PARTNER"]
+    ideal_signals = [
+        signal for signal in ideal_profile.signals
+        if signal.perspective in {"IDEAL_PARTNER", "US"}
+    ]
     return Persona(
         id=candidate_id,
         narrative=self_profile.narrative,

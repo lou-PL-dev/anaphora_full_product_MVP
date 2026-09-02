@@ -22,31 +22,30 @@ class BaseCategory(str, Enum):
     personality = "personality"
     lifestyle = "lifestyle"
     physical_type = "physical_type"
-    relationship_dynamic = "relationship_dynamic"
-    love_language = "love_language"
-    dealbreakers = "dealbreakers"
-    values = "values"
+    relationship_behavior = "relationship_behavior"
+    core_values = "core_values"
+    relationship_shape = "relationship_shape"
+    connection_affection = "connection_affection"
+    shared_direction = "shared_direction"
+    boundaries = "boundaries"
 
 
 class CoverageField(str, Enum):
     ideal_partner_personality = "ideal_partner_personality"
     ideal_partner_lifestyle = "ideal_partner_lifestyle"
     ideal_partner_physical_type = "ideal_partner_physical_type"
-    ideal_partner_relationship_dynamic = "ideal_partner_relationship_dynamic"
-    ideal_partner_love_language = "ideal_partner_love_language"
-    ideal_partner_dealbreakers = "ideal_partner_dealbreakers"
-    ideal_partner_values = "ideal_partner_values"
     me_personality = "me_personality"
     me_lifestyle = "me_lifestyle"
-    me_physical_type = "me_physical_type"
-    me_relationship_dynamic = "me_relationship_dynamic"
-    me_love_language = "me_love_language"
-    me_dealbreakers = "me_dealbreakers"
-    me_values = "me_values"
+    me_relationship_behavior = "me_relationship_behavior"
+    me_core_values = "me_core_values"
+    us_relationship_shape = "us_relationship_shape"
+    us_connection_affection = "us_connection_affection"
+    us_shared_direction = "us_shared_direction"
+    us_boundaries = "us_boundaries"
 
 
 class ConversationObservation(BaseModel):
-    perspective: str = Field(description="ME or IDEAL_PARTNER")
+    perspective: str = Field(description="ME, IDEAL_PARTNER, or US")
     category: BaseCategory
     label: str = Field(description="Short normalized human-readable meaning")
     strength: Strength = Strength.preference
@@ -73,16 +72,30 @@ class SignalItem(BaseModel):
 class PerspectiveBlueprint(BaseModel):
     personality: list[SignalItem] = []
     lifestyle: list[SignalItem] = []
+    # Populated for synthetic candidates and, later, photo/profile data. The
+    # conversation does not ask users to describe their own appearance.
     physical_type: list[SignalItem] = []
-    relationship_dynamic: list[SignalItem] = []
-    love_language: list[SignalItem] = []
-    dealbreakers: list[SignalItem] = []
-    values: list[SignalItem] = []
+    relationship_behavior: list[SignalItem] = []
+    core_values: list[SignalItem] = []
+
+
+class IdealPartnerBlueprint(BaseModel):
+    personality: list[SignalItem] = []
+    lifestyle: list[SignalItem] = []
+    physical_type: list[SignalItem] = []
+
+
+class RelationshipBlueprint(BaseModel):
+    relationship_shape: list[SignalItem] = []
+    connection_affection: list[SignalItem] = []
+    shared_direction: list[SignalItem] = []
+    boundaries: list[SignalItem] = []
 
 
 class ExtractionResult(BaseModel):
-    ideal_partner: PerspectiveBlueprint
     me: PerspectiveBlueprint
+    ideal_partner: IdealPartnerBlueprint
+    us: RelationshipBlueprint
     narrative: str
 
 

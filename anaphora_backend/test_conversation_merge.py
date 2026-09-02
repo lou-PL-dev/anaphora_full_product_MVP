@@ -7,27 +7,30 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+from app.schemas import (ExtractionResult, PerspectiveBlueprint, IdealPartnerBlueprint,
+                         RelationshipBlueprint, SignalItem, Strength)
 
 FIRST_EXTRACTION = ExtractionResult(
-    ideal_partner=PerspectiveBlueprint(
+    ideal_partner=IdealPartnerBlueprint(
         personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm")],
     ),
     me=PerspectiveBlueprint(
         lifestyle=[SignalItem(label="Homebody", strength=Strength.preference, evidence_text="likes staying in")],
     ),
+    us=RelationshipBlueprint(),
     narrative="Warm and drawn to quiet nights in.",
 )
 
 SECOND_EXTRACTION = ExtractionResult(
-    ideal_partner=PerspectiveBlueprint(
-        values=[SignalItem(label="Family-oriented", strength=Strength.preference, evidence_text="wants family closeness")],
-    ),
+    ideal_partner=IdealPartnerBlueprint(),
     me=PerspectiveBlueprint(),
+    us=RelationshipBlueprint(
+        shared_direction=[SignalItem(label="Family-oriented", strength=Strength.preference, evidence_text="wants family closeness")],
+    ),
     narrative="Values close family ties.",
 )
 
-with patch("app.chains.extraction_chain.extract_blueprint", side_effect=[FIRST_EXTRACTION, SECOND_EXTRACTION]):
+with patch("app.routers.conversation_router.extract_blueprint", side_effect=[FIRST_EXTRACTION, SECOND_EXTRACTION]):
     from app.main import app
     client = TestClient(app)
     headers = {"X-Anaphora-User-Id": "merge-test-user"}
@@ -51,7 +54,7 @@ with patch("app.chains.extraction_chain.extract_blueprint", side_effect=[FIRST_E
     categories = {(s["perspective"], s["category"]) for s in signals}
     print("after 2nd conversation:", categories)
     assert categories == {
-        ("IDEAL_PARTNER", "personality"), ("ME", "lifestyle"), ("IDEAL_PARTNER", "values"),
+        ("IDEAL_PARTNER", "personality"), ("ME", "lifestyle"), ("US", "shared_direction"),
     }, f"expected the 1st conversation's categories to survive alongside the 2nd's, got {categories}"
 
     narrative = client.get("/blueprint", headers=headers).json()["narrative"]

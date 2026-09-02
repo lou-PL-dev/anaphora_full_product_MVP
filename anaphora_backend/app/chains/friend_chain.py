@@ -16,10 +16,11 @@ FRIEND_EXTRACTION_PROMPT = """You read a trusted friend's private answers about 
 
 Your job:
 1. Write ONE short (2-4 sentence) narrative paraphrasing what this friend perceives, addressed to "you" — warm, natural. NEVER quote the friend's exact words. The friend's raw answers stay private forever; only this paraphrase and the structured signals below may ever reach you.
-2. Extract structured observations from the answers, each tagged:
-   - ME: something this reveals about you.
-   - IDEAL_PARTNER: something this reveals about who might suit you.
-   Use ONLY these seven categories: personality, lifestyle, physical_type, relationship_dynamic, love_language, dealbreakers, values.
+2. Extract structured observations into the shared Blueprint:
+   - ME: who the user is — personality, lifestyle, relationship_behavior, core_values.
+   - IDEAL_PARTNER: who might suit them — personality, lifestyle, physical_type.
+   - US: the kind of relationship that might suit them — relationship_shape,
+     connection_affection, shared_direction, boundaries.
 
 Rules:
 - Never invent facts the answers don't support.

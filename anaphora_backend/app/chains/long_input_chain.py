@@ -14,9 +14,11 @@ from .input_segmentation import segment_long_input
 LONG_INPUT_DIGEST_PROMPT = """You are processing ONE chunk of a longer user message for Anaphora.
 Extract only what this chunk actually says. Do not answer the user.
 
-Keep ME and IDEAL_PARTNER separate:
-- IDEAL_PARTNER = what the user wants in another person.
-- ME = what the user reveals about themselves.
+Use the shared three-lens taxonomy:
+- ME = who the user is: personality, lifestyle, relationship_behavior, core_values.
+- IDEAL_PARTNER = who they want: personality, lifestyle, physical_type.
+- US = what they want to create together: relationship_shape,
+  connection_affection, shared_direction, boundaries.
 
 For key_points, preserve meaningful nuance, qualifiers, tensions, and contradictions instead of smoothing them into generic summaries.
 For observations, create atomic structured memories with perspective, category, concise normalized label, strength, confidence, explicit/inferred status, and a SHORT verbatim evidence phrase.

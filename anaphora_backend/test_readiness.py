@@ -58,7 +58,12 @@ def _signal(db, user_id, perspective, category, source="conversation"):
 
 
 def _ready_side(db, user_id, perspective):
-    for category in ["personality", "lifestyle", "relationship_dynamic", "values", "love_language"]:
+    categories = {
+        "ME": ["personality", "lifestyle", "relationship_behavior"],
+        "IDEAL_PARTNER": ["personality", "lifestyle", "physical_type"],
+        "US": ["relationship_shape", "connection_affection", "shared_direction"],
+    }[perspective]
+    for category in categories:
         _signal(db, user_id, perspective, category)
 
 
@@ -137,26 +142,26 @@ def test_one_me_signal_plus_discovery_does_not_unlock_me_gate():
     db.close()
 
 
-def test_sufficient_me_profile_is_thirty():
+def test_sufficient_me_profile_is_twenty():
     db = _new_db()
     user = _user(db)
     _ready_side(db, user.id, "ME")
-    assert compute_readiness(db, user.id)[0] == 30
+    assert compute_readiness(db, user.id)[0] == 20
     db.close()
 
 
-def test_sufficient_ideal_partner_profile_is_thirty():
+def test_sufficient_ideal_partner_profile_is_twenty():
     db = _new_db()
     user = _user(db)
     _ready_side(db, user.id, "IDEAL_PARTNER")
-    assert compute_readiness(db, user.id)[0] == 30
+    assert compute_readiness(db, user.id)[0] == 20
     db.close()
 
 
 def test_missing_mandatory_category_does_not_unlock_profile_gate():
     db = _new_db()
     user = _user(db)
-    for category in ["personality", "lifestyle", "values", "love_language", "dealbreakers", "physical_type"]:
+    for category in ["personality", "lifestyle", "physical_type"]:
         _signal(db, user.id, "ME", category)
     assert compute_readiness(db, user.id)[0] == 0
     db.close()
@@ -168,6 +173,7 @@ def test_all_four_areas_reach_one_hundred():
     _discovery(db, user.id)
     _ready_side(db, user.id, "ME")
     _ready_side(db, user.id, "IDEAL_PARTNER")
+    _ready_side(db, user.id, "US")
     score, breakdown = compute_readiness(db, user.id)
     assert score == 100
     assert all(item["met"] for item in breakdown.values())

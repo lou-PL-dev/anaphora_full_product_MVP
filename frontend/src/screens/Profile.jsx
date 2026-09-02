@@ -155,8 +155,9 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
   const readinessRows = [
     ['introduction_essentials', 'Introduction essentials', 20, introductionEarned],
     ['discovery_completed', 'A Discovery completed', 20, breakdown.discovery_completed?.earned || 0],
-    ['me_profile', 'About you', 30, breakdown.me_profile?.earned || 0],
-    ['ideal_partner_profile', "Who you're looking for", 30, breakdown.ideal_partner_profile?.earned || 0],
+    ['me_profile', 'About you', 20, breakdown.me_profile?.earned || 0],
+    ['ideal_partner_profile', "Who you're looking for", 20, breakdown.ideal_partner_profile?.earned || 0],
+    ['us_profile', 'What you want to build together', 20, breakdown.us_profile?.earned || 0],
   ];
 
   const sliderLeft = ((ageMin - 18) / 81) * 100;

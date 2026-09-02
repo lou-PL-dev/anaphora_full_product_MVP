@@ -60,6 +60,35 @@ def sync_indexes() -> None:
 sync_indexes()
 
 
+def migrate_blueprint_taxonomy() -> None:
+    """Idempotently move existing user signals into ME / YOU / US.
+
+    Candidate JSON is intentionally not rewritten here; the candidate
+    regeneration command rebuilds it with the new taxonomy and embeddings.
+    """
+    mappings = [
+        ("ME", "relationship_dynamic", "ME", "relationship_behavior"),
+        ("ME", "love_language", "ME", "relationship_behavior"),
+        ("ME", "values", "ME", "core_values"),
+        ("ME", "dealbreakers", "US", "boundaries"),
+        ("ME", "physical_type", "IDEAL_PARTNER", "physical_type"),
+        ("IDEAL_PARTNER", "relationship_dynamic", "US", "relationship_shape"),
+        ("IDEAL_PARTNER", "love_language", "US", "connection_affection"),
+        ("IDEAL_PARTNER", "values", "US", "shared_direction"),
+        ("IDEAL_PARTNER", "dealbreakers", "US", "boundaries"),
+    ]
+    with engine.begin() as conn:
+        for old_perspective, old_category, new_perspective, new_category in mappings:
+            conn.execute(text(
+                "UPDATE blueprint_signals SET perspective = :new_p, category = :new_c "
+                "WHERE perspective = :old_p AND category = :old_c"
+            ), {"new_p": new_perspective, "new_c": new_category,
+                "old_p": old_perspective, "old_c": old_category})
+
+
+migrate_blueprint_taxonomy()
+
+
 def sync_discovery_registry() -> None:
     db = SessionLocal()
     try:

@@ -10,7 +10,9 @@ from .chains.discovery_chain import (
     synthesize_insight as synthesize_life_insight,
     responses_to_signals as life_responses_to_signals,
 )
-from .chains.discovery_library import DISCOVERY_DEFINITIONS, make_signal_mapper, make_synthesizer
+from .chains.discovery_library import (
+    DISCOVERY_DEFINITIONS, MappedDiscoverySignal, make_signal_mapper, make_synthesizer,
+)
 
 
 @dataclass(frozen=True)
@@ -19,7 +21,7 @@ class DiscoverySpec:
     title: str
     questions: list[dict]
     synthesize_insight: Callable[[dict[str, str]], str]
-    responses_to_signals: Callable[[dict[str, str]], list[SignalItem]]
+    responses_to_signals: Callable[[dict[str, str]], list[MappedDiscoverySignal]]
     perspective: str = "ME"
     category: str = "lifestyle"
     status: str = "active"
@@ -40,9 +42,12 @@ DISCOVERIES: dict[str, DiscoverySpec] = {
         title=LIFE_TITLE,
         questions=_life_questions,
         synthesize_insight=synthesize_life_insight,
-        responses_to_signals=life_responses_to_signals,
-        perspective="ME",
-        category="lifestyle",
+        responses_to_signals=lambda responses: [
+            MappedDiscoverySignal("US", "shared_direction", item)
+            for item in life_responses_to_signals(responses)
+        ],
+        perspective="US",
+        category="shared_direction",
     ),
 }
 
@@ -52,7 +57,11 @@ for discovery_id, definition in DISCOVERY_DEFINITIONS.items():
         title=definition["title"],
         questions=definition["questions"],
         synthesize_insight=make_synthesizer(definition["title"], definition["focus"]),
-        responses_to_signals=make_signal_mapper(definition["questions"]),
+        responses_to_signals=make_signal_mapper(
+            definition["questions"],
+            definition.get("perspective", "ME"),
+            definition["category"],
+        ),
         perspective=definition.get("perspective", "ME"),
         category=definition["category"],
     )

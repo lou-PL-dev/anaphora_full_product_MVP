@@ -29,6 +29,7 @@ def find_matches(
     user_narrative: str,
     user_ideal_partner_signals: list[BlueprintSignal],
     user_me_signals: list[BlueprintSignal] | None = None,
+    user_us_signals: list[BlueprintSignal] | None = None,
     gender_preference: str | None = None,
     age_min: int | None = None,
     age_max: int | None = None,
@@ -39,6 +40,7 @@ def find_matches(
     if not user_ideal_partner_signals:
         return []
     user_me_signals = user_me_signals or []
+    user_us_signals = user_us_signals or []
 
     # Direction 1 demographic eligibility: does the candidate satisfy what
     # this user explicitly said they are open to meeting?
@@ -68,16 +70,18 @@ def find_matches(
         retrieved,
         user_ideal_partner_signals,
         user_me_signals=user_me_signals,
+        user_us_signals=user_us_signals,
         finalist_size=FINALIST_SIZE,
     )
 
     user_context = (
         "USER IDEAL_PARTNER:\n" + _profile_embedding_text(user_ideal_partner_signals)
         + "\n\nUSER ME:\n" + _profile_embedding_text(user_me_signals)
+        + "\n\nUSER US:\n" + _profile_embedding_text(user_us_signals)
     )
     user_hard_requirements = [
         f"{signal.category}: {signal.label}"
-        for signal in user_ideal_partner_signals
+        for signal in user_ideal_partner_signals + user_us_signals
         if signal.strength == "hard_requirement"
         and (signal.confidence is None or signal.confidence >= 0.70)
     ]

@@ -9,18 +9,22 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ConversationTurnResult, CoverageField, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+from app.schemas import (ConversationTurnResult, CoverageField, ExtractionResult,
+                         PerspectiveBlueprint, IdealPartnerBlueprint, RelationshipBlueprint,
+                         SignalItem, Strength)
 
 FAKE_EXTRACTION = ExtractionResult(
-    ideal_partner=PerspectiveBlueprint(
+    ideal_partner=IdealPartnerBlueprint(
         personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm and funny")],
-        relationship_dynamic=[SignalItem(label="Emotionally communicative", strength=Strength.hard_requirement,
-                                          evidence_text="need someone who can actually talk about things")],
         physical_type=[SignalItem(label="Dry humour", strength=Strength.preference, evidence_text="dry humour")],
     ),
     me=PerspectiveBlueprint(
-        relationship_dynamic=[SignalItem(label="Values presence over drama", strength=Strength.preference,
+        relationship_behavior=[SignalItem(label="Values presence over drama", strength=Strength.preference,
                                           evidence_text="doesn't make everything dramatic")],
+    ),
+    us=RelationshipBlueprint(
+        connection_affection=[SignalItem(label="Emotionally communicative", strength=Strength.hard_requirement,
+                                          evidence_text="need someone who can actually talk about things")],
     ),
     narrative="Warm, funny, someone who can actually talk about things without making everything dramatic.",
 )
@@ -31,9 +35,8 @@ FAKE_TURN = ConversationTurnResult(
     reply="What kind of humour really works for you?",
 )
 
-with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
-     patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION), \
-     patch("app.chains.discovery_chain.synthesize_insight", return_value="You want strong roots without feeling stuck."):
+with patch("app.routers.conversation_router.converse", return_value=FAKE_TURN), \
+     patch("app.routers.conversation_router.extract_blueprint", return_value=FAKE_EXTRACTION):
 
     from app.main import app
     client = TestClient(app)
@@ -75,10 +78,12 @@ with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
     print(r.status_code, r.json()["title"])
 
     print("--- respond to discovery ---")
-    r = client.post("/discovery/life_you_are_building/respond", headers=headers, json=[
-        {"user_id": "test-user-louise", "question_id": "saturday_2032", "response": "c"},
-        {"user_id": "test-user-louise", "question_id": "roots_freedom", "response": "Roots"},
-    ])
+    with patch("app.chains.discovery_chain.get_chat_llm") as discovery_llm:
+        discovery_llm.return_value.invoke.return_value.content = "You want strong roots without feeling stuck."
+        r = client.post("/discovery/life_you_are_building/respond", headers=headers, json=[
+            {"user_id": "test-user-louise", "question_id": "saturday_2032", "response": "c"},
+            {"user_id": "test-user-louise", "question_id": "roots_freedom", "response": "Roots"},
+        ])
     print(r.status_code)
     print(_json.dumps(r.json(), indent=2))
 

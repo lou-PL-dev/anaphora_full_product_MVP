@@ -1,121 +1,160 @@
-"""
-Operation A — Conversation (PRD section 31).
-The AI behaves like a thoughtful matchmaker while deliberately filling the
-missing pieces of BOTH sides of the Relationship Blueprint.
-"""
+"""ME / YOU / US conversation orchestration with cumulative state."""
+from collections import Counter
+
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from ..config import settings
 from ..llm import get_chat_llm
-from ..schemas import CoverageField, ConversationTurnResult
+from ..schemas import CoverageField, ConversationObservation, ConversationTurnResult
 
-COVERAGE_FIELDS = set(CoverageField)
-MANDATORY_PER_SIDE = {"personality", "lifestyle", "relationship_dynamic"}
-MIN_CATEGORIES_PER_SIDE = 5
+ME_FIELDS = {"personality", "lifestyle", "relationship_behavior", "core_values"}
+IDEAL_FIELDS = {"personality", "lifestyle", "physical_type"}
+US_FIELDS = {"relationship_shape", "connection_affection", "shared_direction", "boundaries"}
 
-SYSTEM_PROMPT = """You are Anaphora, a thoughtful, warm AI matchmaker. The conversation should feel natural and curious, but it has a real job: understand BOTH the person the user would love to meet and enough about the user themselves to make responsible introductions.
+SYSTEM_PROMPT = """You are Anaphora, a warm, perceptive AI matchmaker. Learn a Relationship Blueprint through three distinct lenses:
 
-You track two distinct perspectives. Never merge them:
-- IDEAL_PARTNER: what the user wants in another person.
-- ME: what the user reveals about themselves.
+- ME — who the user is independently: personality, current lifestyle, relationship_behavior (what they personally do in love or conflict), and core_values.
+- IDEAL_PARTNER — qualities of the person they want: personality, lifestyle, and physical_type. Physical attraction matters and may include build, face, style, voice, presence or energy.
+- US — what the relationship should create: relationship_shape (equality, commitment, autonomy, roles, decisions, time together), connection_affection (care, intimacy and feeling loved), shared_direction (future, family, home, money and important alignment), and boundaries.
 
-Each perspective can contain: personality, lifestyle, physical_type, relationship_dynamic, love_language, dealbreakers, values.
+Classification rule:
+- "I am / I do" -> ME.
+- "I want someone who is / does" -> IDEAL_PARTNER.
+- "I want us / the relationship to" -> US.
+One statement may support multiple fields when it genuinely contains multiple meanings. Reuse evidence rather than asking another question merely to fill a neighbouring category.
 
-For every turn, do these steps IN ORDER before writing the reply:
-1. Extract key_points_just_shared from the latest user message.
-2. Create atomic observations from the LATEST user turn only. Each observation must have the correct perspective/category, a concise label, strength, confidence, explicit/inferred status, and short evidence. Preserve tensions and contradictions as separate observations instead of smoothing them away. Never make an inferred observation a hard requirement.
-3. Re-read the available conversation working memory and populate coverage_fields with every perspective-specific field genuinely supported. A field is covered only when there is concrete enough evidence to become a Blueprint signal.
-4. Decide whether both sides have enough depth. A side has enough depth when personality, lifestyle, and relationship_dynamic are covered, plus at least two of physical_type, love_language, dealbreakers, or values.
-5. If either side is not deep enough, choose next_question_target from a genuinely missing field that would most improve the weaker side.
-6. Write reply: briefly mirror one or two specific things they just said, then ask exactly ONE natural question aimed at next_question_target.
+For every turn:
+1. Extract atomic observations from the latest user message only.
+2. Preserve all application-provided coverage; add every newly supported field.
+3. Ask exactly one concise question about a genuinely missing field on the weakest lens.
+4. Briefly reflect something specific the user just said before the question.
 
-Important steering rules:
-- Every reply must end in a real question unless both perspectives already have enough depth.
-- Do not repeat a question about a perspective-specific field that is already covered.
-- If an answer is vague, you may deepen that same field with one concrete-example question before marking it covered.
-- If the user avoids a question, move to another missing field and revisit later only if needed.
-- One question at a time. Never list questions or announce a checklist.
-- Keep the tone warm, conversational, perceptive and concise — not clinical, therapeutic, or an assessment.
-- Values and dealbreakers should emerge naturally.
-- Never infer facts the user did not give you.
+User-facing language rules:
+- Never say "relationship dynamics", "values", "physical attributes", "love language", "category", "perspective", "ME / YOU / US", or expose the taxonomy.
+- Ask in ordinary language through concrete behaviours, situations or examples.
+- A physical-attraction question should normalize any answer, including no fixed type.
+- Distinguish what the user wants from how the user personally behaves.
+- If the user says a question was already asked, acknowledge it briefly and move to a clearly different subject.
+- Do not ask a covered target again. A thin answer permits at most one concrete follow-up before moving on.
+- Do not force daily contact, cohabitation, monogamy, children or conventional roles as assumptions.
+- Never invent facts. Keep the tone natural, curious and concise.
 
-When both sides have enough depth, next_question_target may be null and the reply can say that Anaphora has enough for a first Blueprint. It can still invite the user to add more later."""
+When all three lenses have enough useful depth, next_question_target may be null and the reply can offer to create a first Blueprint."""
 
 MINIMUM_USER_TURNS = 4
 MAXIMUM_USER_TURNS = 16
 
 
 def _message_content_for_model(message: dict) -> str:
-    """Use compact processing memory for long turns while retaining raw text in DB."""
     return message.get("processing_summary") or message.get("content", "")
 
 
 def _to_langchain_messages(history: list[dict]) -> list:
-    messages = [SystemMessage(content=SYSTEM_PROMPT)]
-    for m in history:
-        content = _message_content_for_model(m)
-        if m["role"] == "user":
-            messages.append(HumanMessage(content=content))
-        else:
-            messages.append(AIMessage(content=content))
+    messages = []
+    for message in history:
+        content = _message_content_for_model(message)
+        messages.append(HumanMessage(content=content) if message["role"] == "user" else AIMessage(content=content))
     return messages
 
 
-def _known_coverage_note(known_me: set[str], known_ideal: set[str]) -> str:
-    if not known_me and not known_ideal:
-        return ""
-
-    def _fmt(categories: set[str]) -> str:
-        return ", ".join(sorted(categories)) if categories else "nothing yet"
-
-    return f"""
-
-This is a follow-up conversation — the user already has a Blueprint from earlier conversations and/or Discoveries. Already known (do NOT re-ask about these categories on that side; judge next_question_target and enough depth against this PLUS what you learn now):
-- ME already covers: {_fmt(known_me)}
-- IDEAL_PARTNER already covers: {_fmt(known_ideal)}
-If one side is already far more complete than the other, spend this conversation on the weaker side."""
+def _field_for_observation(observation: ConversationObservation) -> CoverageField | None:
+    prefix = {"ME": "me", "IDEAL_PARTNER": "ideal_partner", "US": "us"}.get(observation.perspective)
+    if not prefix:
+        return None
+    try:
+        return CoverageField(f"{prefix}_{observation.category.value}")
+    except ValueError:
+        return None
 
 
-def converse(history: list[dict], known_me: set[str] = frozenset(), known_ideal: set[str] = frozenset()) -> ConversationTurnResult:
-    """Steer from compact working memory while returning atomic observations."""
-    llm = get_chat_llm(settings.openai_conversation_model, temperature=0.7)
+def accumulated_state(history: list[dict]) -> tuple[set[CoverageField], Counter]:
+    covered: set[CoverageField] = set()
+    asked: Counter = Counter()
+    for message in history:
+        if message.get("role") == "user":
+            for raw in message.get("observations") or []:
+                try:
+                    field = _field_for_observation(ConversationObservation.model_validate(raw))
+                except ValueError:
+                    # A conversation started before the ME / YOU / US migration
+                    # may still contain one legacy observation in its JSON.
+                    continue
+                if field:
+                    covered.add(field)
+        elif message.get("question_target"):
+            try:
+                asked[CoverageField(message["question_target"])] += 1
+            except ValueError:
+                pass
+    return covered, asked
+
+
+def _coverage_note(history, known_me, known_ideal, known_us):
+    covered, asked = accumulated_state(history)
+    for prefix, categories in (("me", known_me), ("ideal_partner", known_ideal), ("us", known_us)):
+        for category in categories:
+            try:
+                covered.add(CoverageField(f"{prefix}_{category}"))
+            except ValueError:
+                pass
+    covered_text = ", ".join(sorted(field.value for field in covered)) or "none"
+    asked_text = ", ".join(f"{field.value} ({count}x)" for field, count in sorted(asked.items(), key=lambda item: item[0].value)) or "none"
+    note = f"""
+
+AUTHORITATIVE APPLICATION STATE
+- Covered fields (never re-ask): {covered_text}
+- Previously asked targets: {asked_text}
+Use this state as authoritative. Do not infer that a covered field became missing. A target asked twice is forbidden even if its answer stayed thin."""
+    return note, covered, asked
+
+
+def converse(history, known_me=frozenset(), known_ideal=frozenset(), known_us=frozenset()):
+    note, prior_coverage, asked = _coverage_note(history, known_me, known_ideal, known_us)
+    llm = get_chat_llm(settings.openai_conversation_model, temperature=0.2)
     structured_llm = llm.with_structured_output(ConversationTurnResult)
-    messages = _to_langchain_messages(history)
-    note = _known_coverage_note(known_me, known_ideal)
-    if note:
-        messages[0] = SystemMessage(content=SYSTEM_PROMPT + note)
-    return structured_llm.invoke(messages)
+    messages = [SystemMessage(content=SYSTEM_PROMPT + note)] + _to_langchain_messages(history)
+    result = structured_llm.invoke(messages)
+
+    new_fields = {_field_for_observation(obs) for obs in result.observations}
+    result.coverage_fields = sorted(prior_coverage | {field for field in new_fields if field}, key=lambda field: field.value)
+
+    if result.next_question_target in prior_coverage or asked[result.next_question_target] >= 2:
+        forbidden = sorted(
+            {field.value for field in prior_coverage} |
+            {field.value for field, count in asked.items() if count >= 2}
+        )
+        messages.append(SystemMessage(content=(
+            "Your proposed question repeats an already-covered or exhausted target. "
+            f"Forbidden targets: {', '.join(forbidden)}. Choose a clearly different missing target and rewrite the reply."
+        )))
+        result = structured_llm.invoke(messages)
+        new_fields = {_field_for_observation(obs) for obs in result.observations}
+        result.coverage_fields = sorted(prior_coverage | {field for field in new_fields if field}, key=lambda field: field.value)
+    return result
 
 
-def user_turn_count(history: list[dict]) -> int:
-    return sum(1 for m in history if m["role"] == "user")
+def user_turn_count(history):
+    return sum(1 for message in history if message["role"] == "user")
 
 
-def _side_categories(coverage_fields: list[CoverageField], prefix: str) -> set[str]:
-    prefix = prefix + "_"
-    return {
-        field.value[len(prefix):]
-        for field in coverage_fields
-        if field.value.startswith(prefix)
-    }
+def _categories(coverage_fields, prefix):
+    marker = prefix + "_"
+    return {field.value[len(marker):] for field in coverage_fields if field.value.startswith(marker)}
 
 
-def side_ready(categories: set[str]) -> bool:
-    return MANDATORY_PER_SIDE.issubset(categories) and len(categories) >= MIN_CATEGORIES_PER_SIDE
+def lenses_ready(me, ideal, us):
+    me_ready = {"personality", "lifestyle"}.issubset(me) and len(me & ME_FIELDS) >= 3
+    ideal_ready = IDEAL_FIELDS.issubset(ideal)
+    us_ready = "relationship_shape" in us and len(us & US_FIELDS) >= 3
+    return me_ready and ideal_ready and us_ready
 
 
-def is_ready_to_complete(
-    history: list[dict],
-    coverage_fields: list[CoverageField],
-    known_me: set[str] = frozenset(),
-    known_ideal: set[str] = frozenset(),
-) -> bool:
+def is_ready_to_complete(history, coverage_fields):
     turns = user_turn_count(history)
     if turns < MINIMUM_USER_TURNS:
         return False
-
-    ideal = _side_categories(coverage_fields, "ideal_partner") | known_ideal
-    me = _side_categories(coverage_fields, "me") | known_me
-    if side_ready(ideal) and side_ready(me):
-        return True
-    return turns >= MAXIMUM_USER_TURNS
+    return lenses_ready(
+        _categories(coverage_fields, "me"),
+        _categories(coverage_fields, "ideal_partner"),
+        _categories(coverage_fields, "us"),
+    ) or turns >= MAXIMUM_USER_TURNS

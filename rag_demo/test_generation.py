@@ -11,7 +11,7 @@ import random
 import pytest
 
 from generate_personas import (
-    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, NARRATIVE_CATEGORIES, STYLE_SEED_EXAMPLES,
+    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, NARRATIVE_CATEGORY_KEYS, STYLE_SEED_EXAMPLES,
     build_narrative_prompt, describe_trait_profile, extraction_result_to_signals,
     generate_candidate_pool, generate_persona_pool, offline_narrative, offline_self_narrative,
     sample_category_ingredients,
@@ -27,7 +27,7 @@ except Exception:
 
 
 def _assert_valid_signal(sig) -> None:
-    assert sig.perspective in ("ME", "IDEAL_PARTNER")
+    assert sig.perspective in ("ME", "IDEAL_PARTNER", "US")
     valid_categories = {cat for (persp, cat) in CANDIDATE_LABELS if persp == sig.perspective}
     assert sig.category in valid_categories, f"unexpected category {sig.category!r} for {sig.perspective}"
     assert sig.strength in STRENGTHS
@@ -124,14 +124,15 @@ def test_build_narrative_prompt_carries_style_seeds_not_content():
 
 
 def test_extraction_result_to_signals_shape():
-    from app.schemas import ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+    from app.schemas import (ExtractionResult, PerspectiveBlueprint, IdealPartnerBlueprint,
+                             RelationshipBlueprint, SignalItem, Strength)
 
     result = ExtractionResult(
-        ideal_partner=PerspectiveBlueprint(
+        ideal_partner=IdealPartnerBlueprint(
             personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="checks in")],
-            dealbreakers=[SignalItem(label="No smoking", strength=Strength.hard_requirement)],
         ),
-        me=PerspectiveBlueprint(values=[SignalItem(label="Growth", strength=Strength.preference)]),
+        me=PerspectiveBlueprint(core_values=[SignalItem(label="Growth", strength=Strength.preference)]),
+        us=RelationshipBlueprint(boundaries=[SignalItem(label="No smoking", strength=Strength.hard_requirement)]),
         narrative="Warm, and won't budge on smoking.",
     )
     signals = extraction_result_to_signals(result)
@@ -140,20 +141,23 @@ def test_extraction_result_to_signals_shape():
         _assert_valid_signal(sig)
     ideal = [s for s in signals if s.perspective == "IDEAL_PARTNER"]
     me = [s for s in signals if s.perspective == "ME"]
-    assert {s.category for s in ideal} == {"personality", "dealbreakers"}
-    assert {s.category for s in me} == {"values"}
+    us = [s for s in signals if s.perspective == "US"]
+    assert {s.category for s in ideal} == {"personality"}
+    assert {s.category for s in me} == {"core_values"}
+    assert {s.category for s in us} == {"boundaries"}
 
 
 def test_sample_category_ingredients_covers_every_narrative_category():
     rng = random.Random(3)
     for perspective in ("ME", "IDEAL_PARTNER"):
         ingredients = sample_category_ingredients(rng, perspective)
-        assert set(ingredients) == set(NARRATIVE_CATEGORIES)
-        for category, labels in ingredients.items():
+        assert set(ingredients) == {f"{p}.{c}" for p, c in NARRATIVE_CATEGORY_KEYS[perspective]}
+        for key, labels in ingredients.items():
             assert len(labels) == 2
             assert len(set(labels)) == len(labels)  # distinct, no repeats within a category
+            signal_perspective, category = key.split(".", 1)
             for label in labels:
-                assert label in CANDIDATE_LABELS[(perspective, category)]
+                assert label in CANDIDATE_LABELS[(signal_perspective, category)]
 
 
 def test_sample_category_ingredients_clamps_to_pool_size():
@@ -161,8 +165,9 @@ def test_sample_category_ingredients_clamps_to_pool_size():
     labels — just return everything the pool has."""
     rng = random.Random(9)
     ingredients = sample_category_ingredients(rng, "ME", count=1000)
-    for category, labels in ingredients.items():
-        assert set(labels) == set(CANDIDATE_LABELS[("ME", category)])
+    for key, labels in ingredients.items():
+        signal_perspective, category = key.split(".", 1)
+        assert set(labels) == set(CANDIDATE_LABELS[(signal_perspective, category)])
 
 
 def test_offline_self_narrative_includes_ingredients():

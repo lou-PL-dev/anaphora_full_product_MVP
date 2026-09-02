@@ -1,35 +1,51 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ..llm import get_chat_llm
 from ..schemas import SignalItem, Strength
+
+
+@dataclass(frozen=True)
+class MappedDiscoverySignal:
+    perspective: str
+    category: str
+    item: SignalItem
 
 
 def _option(id_: str, label: str) -> dict:
     return {"id": id_, "label": label}
 
 
-def _choice(id_: str, prompt: str, options: list[tuple[str, str]], signal_prefix: str) -> dict:
+def _choice(id_: str, prompt: str, options: list[tuple[str, str]], signal_prefix: str,
+            perspective: str | None = None, category: str | None = None) -> dict:
     return {
         "id": id_,
         "prompt": prompt,
         "options": [_option(k, v) for k, v in options] + [_option("other", "Something else")],
         "signal_prefix": signal_prefix,
+        "perspective": perspective,
+        "category": category,
     }
 
 
-def _spectrum(id_: str, prompt: str, left: str, right: str, signal_prefix: str) -> dict:
-    return {"id": id_, "prompt": prompt, "spectrum": [left, right], "signal_prefix": signal_prefix}
+def _spectrum(id_: str, prompt: str, left: str, right: str, signal_prefix: str,
+              perspective: str | None = None, category: str | None = None) -> dict:
+    return {"id": id_, "prompt": prompt, "spectrum": [left, right], "signal_prefix": signal_prefix,
+            "perspective": perspective, "category": category}
 
 
-def _text(id_: str, prompt: str, signal_prefix: str, placeholder: str = "Write whatever comes to mind…") -> dict:
-    return {"id": id_, "prompt": prompt, "text": True, "placeholder": placeholder, "signal_prefix": signal_prefix}
+def _text(id_: str, prompt: str, signal_prefix: str, placeholder: str = "Write whatever comes to mind…",
+          perspective: str | None = None, category: str | None = None) -> dict:
+    return {"id": id_, "prompt": prompt, "text": True, "placeholder": placeholder,
+            "signal_prefix": signal_prefix, "perspective": perspective, "category": category}
 
 
 DISCOVERY_DEFINITIONS = {
     "feel_at_home": {
         "title": "What makes you feel at home?",
-        "category": "love_language",
-        "perspective": "IDEAL_PARTNER",
+        "category": "connection_affection",
+        "perspective": "US",
         "focus": "emotional needs, intimacy, autonomy, reassurance and communication",
         "questions": [
             _choice("bad_day", "You've had a horrible day. What would you most want your partner to do?", [
@@ -86,7 +102,7 @@ DISCOVERY_DEFINITIONS = {
     },
     "how_you_love": {
         "title": "How do you love?",
-        "category": "relationship_dynamic",
+        "category": "relationship_behavior",
         "perspective": "ME",
         "focus": "communication, closeness, conflict and emotional dynamics",
         "questions": [
@@ -119,8 +135,8 @@ DISCOVERY_DEFINITIONS = {
     },
     "live_together": {
         "title": "Could we actually live together?",
-        "category": "lifestyle",
-        "perspective": "ME",
+        "category": "relationship_shape",
+        "perspective": "US",
         "focus": "everyday compatibility, routines, money, cleanliness, social life, travel, sleep, family and leisure",
         "questions": [
             _choice("messy_sunday", "It's Sunday morning and the flat is a mess. What happens?", [
@@ -135,7 +151,7 @@ DISCOVERY_DEFINITIONS = {
                 ("home", "Improve the home"),
                 ("split", "Spend some, save some"),
                 ("separate", "Our money stays mostly separate anyway"),
-            ], "Money instinct"),
+            ], "Money instinct", "US", "shared_direction"),
             _choice("friends_over", "Your partner invites six friends over tonight without much warning. Your reaction?", [
                 ("amazing", "Amazing"),
                 ("sometimes", "Fine occasionally"),
@@ -148,13 +164,13 @@ DISCOVERY_DEFINITIONS = {
                 ("spending", "Different spending habits"),
                 ("social", "Very different social needs"),
                 ("planning", "Different attitudes to planning"),
-            ], "Everyday friction point"),
+            ], "Everyday friction point", "US", "boundaries"),
         ],
     },
     "non_negotiables": {
         "title": "What can't you compromise on?",
-        "category": "dealbreakers",
-        "perspective": "IDEAL_PARTNER",
+        "category": "boundaries",
+        "perspective": "US",
         "focus": "non-negotiables, strong preferences and ideal-world preferences",
         "questions": [
             _choice("must_have", "If only one quality absolutely had to be there, which would you protect first?", [
@@ -166,21 +182,21 @@ DISCOVERY_DEFINITIONS = {
                 ("reliability", "Reliability"),
                 ("independence", "Independence"),
                 ("values", "Similar values"),
-            ], "Must-have"),
+            ], "Must-have", "IDEAL_PARTNER", "personality"),
             _choice("reliable_adventurous", "Which would you rather explore?", [
                 ("reliable", "Very reliable, but life together may be fairly predictable"),
                 ("adventurous", "Exciting and spontaneous, but sometimes inconsistent"),
-            ], "Reliability vs adventure"),
+            ], "Reliability vs adventure", "IDEAL_PARTNER", "lifestyle"),
             _choice("warm_ambitious", "Which trade-off feels easier to live with?", [
                 ("warm", "Very warm and available, but not especially ambitious"),
                 ("ambitious", "Very driven and inspiring, but often short on time"),
-            ], "Availability vs ambition"),
-            _text("walk_away", "What, if anything, would genuinely make you walk away from an otherwise promising relationship?", "Walk-away boundary"),
+            ], "Availability vs ambition", "IDEAL_PARTNER", "personality"),
+            _text("walk_away", "What, if anything, would genuinely make you walk away from an otherwise promising relationship?", "Walk-away boundary", perspective="US", category="boundaries"),
         ],
     },
     "relationship_archaeology": {
         "title": "Relationship Archaeology",
-        "category": "relationship_dynamic",
+        "category": "relationship_behavior",
         "perspective": "ME",
         "focus": "patterns across previous relationships, framed as hypotheses rather than diagnoses",
         "questions": [
@@ -217,11 +233,12 @@ For Relationship Archaeology especially, present any pattern as something worth 
     return synthesize
 
 
-def make_signal_mapper(questions: list[dict], strength: Strength = Strength.preference):
+def make_signal_mapper(questions: list[dict], default_perspective: str, default_category: str,
+                       strength: Strength = Strength.preference):
     by_id = {q["id"]: q for q in questions}
 
-    def map_signals(responses: dict[str, str]) -> list[SignalItem]:
-        signals: list[SignalItem] = []
+    def map_signals(responses: dict[str, str]) -> list[MappedDiscoverySignal]:
+        signals: list[MappedDiscoverySignal] = []
         for qid, answer in responses.items():
             q = by_id.get(qid)
             if not q or not str(answer).strip():
@@ -233,10 +250,14 @@ def make_signal_mapper(questions: list[dict], strength: Strength = Strength.pref
                     break
             prefix = q.get("signal_prefix", q.get("prompt", "Preference"))
             item_strength = Strength.hard_requirement if qid == "walk_away" and readable else strength
-            signals.append(SignalItem(
-                label=f"{prefix}: {readable}",
-                strength=item_strength,
-                evidence_text=f"{q.get('prompt', qid)} — {readable}",
+            signals.append(MappedDiscoverySignal(
+                perspective=q.get("perspective") or default_perspective,
+                category=q.get("category") or default_category,
+                item=SignalItem(
+                    label=f"{prefix}: {readable}",
+                    strength=item_strength,
+                    evidence_text=f"{q.get('prompt', qid)} — {readable}",
+                ),
             ))
         return signals
 

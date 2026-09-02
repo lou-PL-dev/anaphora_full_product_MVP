@@ -39,7 +39,11 @@ def list_discoveries(user: User = Depends(get_current_user), db: Session = Depen
 @router.get("/{discovery_id}")
 def get_discovery(discovery_id: str):
     spec = _spec_or_404(discovery_id)
-    return {"id": spec.id, "title": spec.title, "questions": spec.questions}
+    public_questions = [
+        {key: value for key, value in question.items() if key not in {"perspective", "category"}}
+        for question in spec.questions
+    ]
+    return {"id": spec.id, "title": spec.title, "questions": public_questions}
 
 
 @router.post("/{discovery_id}/respond", response_model=DiscoveryResultResponse)
@@ -94,11 +98,19 @@ def respond_to_discovery(
                 response=item.response,
             ))
 
-        for item in new_signal_items:
+        existing_keys = {
+            (signal.perspective, signal.category, (signal.label or "").strip().casefold())
+            for signal in db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
+        }
+        for mapped in new_signal_items:
+            item = mapped.item
+            key = (mapped.perspective, mapped.category, item.label.strip().casefold())
+            if key in existing_keys:
+                continue
             signal = BlueprintSignal(
                 user_id=user.id,
-                perspective=spec.perspective,
-                category=spec.category,
+                perspective=mapped.perspective,
+                category=mapped.category,
                 label=item.label,
                 strength=item.strength.value,
                 source=source_key,
@@ -106,6 +118,7 @@ def respond_to_discovery(
             )
             db.add(signal)
             created.append(signal)
+            existing_keys.add(key)
 
         db.commit()
         for signal in created:

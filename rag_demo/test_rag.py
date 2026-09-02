@@ -7,7 +7,7 @@ import random
 
 
 def _assert_valid_signal(sig) -> None:
-    assert sig.perspective in ("ME", "IDEAL_PARTNER")
+    assert sig.perspective in ("ME", "IDEAL_PARTNER", "US")
     valid_categories = {cat for (persp, cat) in CANDIDATE_LABELS if persp == sig.perspective}
     assert sig.category in valid_categories, f"unexpected category {sig.category!r} for {sig.perspective}"
     assert sig.strength in STRENGTHS

@@ -71,6 +71,7 @@ def assess_relationship_candidates(
             f"reciprocal profile complete: {'yes' if reciprocal_complete else 'no'}\n"
             f"CANDIDATE ME BLUEPRINT:\n{_candidate_profile(candidate, 'ME')}\n"
             f"CANDIDATE IDEAL_PARTNER BLUEPRINT:\n{_candidate_profile(candidate, 'IDEAL_PARTNER')}\n"
+            f"CANDIDATE US BLUEPRINT:\n{_candidate_profile(candidate, 'US')}\n"
             f"PRECOMPUTED RECIPROCAL EVIDENCE:\n{evidence_block}"
         )
 

@@ -8,11 +8,11 @@ state; it is not itself the source of truth for matching.
 from ..llm import get_chat_llm
 from ..schemas import ConversationObservation, ExtractionResult
 
-RECONCILIATION_SYSTEM_PROMPT = """You reconcile Anaphora's accumulated atomic conversation observations into one Relationship Blueprint.
+RECONCILIATION_SYSTEM_PROMPT = """You reconcile Anaphora's accumulated atomic conversation observations into one ME / IDEAL_PARTNER / US Relationship Blueprint.
 
 Critical rules:
 - Treat the observations as the canonical machine-readable evidence.
-- Keep ME and IDEAL_PARTNER strictly separate.
+- Keep the three lenses strictly separate: ME is who the user is, IDEAL_PARTNER is who they want, and US is the relationship they want to create.
 - Preserve meaningful tensions or apparently contradictory needs as separate signals when both are supported; do not smooth them into a vague compromise.
 - Deduplicate observations that clearly mean the same thing, preferring the more explicit and better-supported wording.
 - Never upgrade an inferred observation into a hard_requirement.
@@ -20,13 +20,16 @@ Critical rules:
 - Keep confidence conservative. Do not invent missing facts.
 - evidence_text must remain a short phrase grounded in the supplied evidence.
 
-Return the same seven categories for both perspectives: personality, lifestyle, physical_type, relationship_dynamic, love_language, dealbreakers, values.
+Return only the categories belonging to each lens:
+- ME: personality, lifestyle, relationship_behavior, core_values, plus physical_type only when an actual self-description or profile data supports it (never ask the user for it in conversation).
+- IDEAL_PARTNER: personality, lifestyle, physical_type.
+- US: relationship_shape, connection_affection, shared_direction, boundaries.
 
-After reconciling the structured signals, write ONE flowing human-readable portrait of the IDEAL_PARTNER. The narrative is only a presentation layer over the structured evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
+After reconciling the structured signals, write ONE flowing human-readable portrait covering who the user is, who they seek, and what they hope to build together. The narrative is only a presentation layer over the structured evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
 
 LEGACY_TRANSCRIPT_PROMPT = """This is a legacy Anaphora conversation created before atomic observations were stored. Extract a structured Relationship Blueprint from the transcript so the user can finish their existing conversation.
 
-Keep ME and IDEAL_PARTNER strictly separate. Use only supported facts, preserve tensions instead of smoothing them away, assign hard_requirement only when explicitly non-negotiable, keep confidence conservative, and retain short evidence phrases. Then write a human-readable IDEAL_PARTNER narrative as a presentation layer over those signals."""
+Use the ME / IDEAL_PARTNER / US taxonomy. ME contains personality, lifestyle, relationship_behavior, core_values, and optional self physical_type when explicitly supplied. IDEAL_PARTNER contains personality, lifestyle and physical_type. US contains relationship_shape, connection_affection, shared_direction and boundaries. Use only supported facts, preserve tensions instead of smoothing them away, assign hard_requirement only when explicitly non-negotiable, keep confidence conservative, and retain short evidence phrases. Then write a human-readable portrait as a presentation layer over those signals."""
 
 
 def observations_from_history(history: list[dict]) -> list[ConversationObservation]:
@@ -36,7 +39,22 @@ def observations_from_history(history: list[dict]) -> list[ConversationObservati
         if message.get("role") != "user":
             continue
         for raw in message.get("observations") or []:
-            observations.append(ConversationObservation.model_validate(raw))
+            normalized = dict(raw)
+            legacy_key = (normalized.get("perspective"), normalized.get("category"))
+            legacy_map = {
+                ("ME", "relationship_dynamic"): ("ME", "relationship_behavior"),
+                ("ME", "love_language"): ("ME", "relationship_behavior"),
+                ("ME", "values"): ("ME", "core_values"),
+                ("ME", "dealbreakers"): ("US", "boundaries"),
+                ("ME", "physical_type"): ("IDEAL_PARTNER", "physical_type"),
+                ("IDEAL_PARTNER", "relationship_dynamic"): ("US", "relationship_shape"),
+                ("IDEAL_PARTNER", "love_language"): ("US", "connection_affection"),
+                ("IDEAL_PARTNER", "values"): ("US", "shared_direction"),
+                ("IDEAL_PARTNER", "dealbreakers"): ("US", "boundaries"),
+            }
+            if legacy_key in legacy_map:
+                normalized["perspective"], normalized["category"] = legacy_map[legacy_key]
+            observations.append(ConversationObservation.model_validate(normalized))
     return observations
 
 

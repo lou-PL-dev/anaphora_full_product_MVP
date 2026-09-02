@@ -107,7 +107,22 @@ ATTACHMENT_DESCRIPTIONS = {
 # real users — see dataset_documentation.md's "Candidate depth fix" note.
 # These 5 categories borrow the SAME curated label pools profiles.py's
 # baseline generator already uses, rather than inventing a second set.
-NARRATIVE_CATEGORIES = ["lifestyle", "physical_type", "love_language", "dealbreakers", "values"]
+NARRATIVE_CATEGORY_KEYS = {
+    "IDEAL_PARTNER": [
+        ("IDEAL_PARTNER", "lifestyle"),
+        ("IDEAL_PARTNER", "physical_type"),
+        ("US", "relationship_shape"),
+        ("US", "connection_affection"),
+        ("US", "shared_direction"),
+        ("US", "boundaries"),
+    ],
+    "ME": [
+        ("ME", "lifestyle"),
+        ("ME", "physical_type"),
+        ("ME", "relationship_behavior"),
+        ("ME", "core_values"),
+    ],
+}
 
 # How many distinct ingredient labels to draw per narrative category. A
 # single ingredient per category gave each category roughly 1 signal after
@@ -127,11 +142,11 @@ def sample_category_ingredients(
     cover, so the narrative-writing prompt has more than one throwaway
     line to say about each of the 7 categories."""
     return {
-        category: rng.sample(
-            CANDIDATE_LABELS[(perspective, category)],
-            k=min(count, len(CANDIDATE_LABELS[(perspective, category)])),
+        f"{signal_perspective}.{category}": rng.sample(
+            CANDIDATE_LABELS[(signal_perspective, category)],
+            k=min(count, len(CANDIDATE_LABELS[(signal_perspective, category)])),
         )
-        for category in NARRATIVE_CATEGORIES
+        for signal_perspective, category in NARRATIVE_CATEGORY_KEYS[perspective]
     }
 
 
@@ -171,8 +186,9 @@ def build_narrative_prompt(
         "Translate those traits into ordinary, concrete language and specific "
         "little details — never name a trait directly (no 'high conscientiousness', "
         "no 'secure attachment'). Naturally weave in BOTH concrete details given for "
-        "each of lifestyle, physical presence, how they show love, dealbreakers, and "
-        "what they value — as part of the story, never a checklist. End with one brief, "
+        "their lifestyle and physical presence, then what the speaker wants them to create "
+        "together: the shape of the relationship, affection, future direction and boundaries. "
+        "Keep each detail in its correct ME / ideal partner / relationship meaning. End with one brief, "
         "natural sentence revealing something small about the speaker themselves, "
         "the way people naturally do when describing what they want."
     )
@@ -212,8 +228,8 @@ def build_self_narrative_prompt(
         "way: " + describe_trait_profile(trait_profile, category_ingredients) + "\n\n"
         "Translate those traits into ordinary, concrete language and specific little details "
         "about how THEY live and act — never name a trait directly (no 'high conscientiousness', "
-        "no 'secure attachment'). Naturally weave in BOTH concrete details given for each of "
-        "lifestyle, physical presence, how they show love, dealbreakers, and what they value — "
+        "no 'secure attachment'). Naturally weave in the concrete details about their lifestyle, "
+        "physical presence, relationship behaviour and core principles — "
         "as part of the story, never a checklist. Write it entirely in first person, about the "
         "speaker, not about a partner they're looking for."
     )
@@ -279,14 +295,13 @@ def offline_narrative(trait_profile: dict, category_ingredients: dict[str, list[
 # physical_type/love_language/dealbreakers) without this file being updated
 # to match.
 def extraction_result_to_signals(result) -> list[Signal]:
-    from app.schemas import PerspectiveBlueprint
-
     signals: list[Signal] = []
-    for category in PerspectiveBlueprint.model_fields:
-        for item in getattr(result.ideal_partner, category):
-            signals.append(Signal("IDEAL_PARTNER", category, item.label, item.strength.value, item.evidence_text))
-        for item in getattr(result.me, category):
-            signals.append(Signal("ME", category, item.label, item.strength.value, item.evidence_text))
+    for perspective, blueprint in (
+        ("ME", result.me), ("IDEAL_PARTNER", result.ideal_partner), ("US", result.us),
+    ):
+        for category in type(blueprint).model_fields:
+            for item in getattr(blueprint, category):
+                signals.append(Signal(perspective, category, item.label, item.strength.value, item.evidence_text))
     return signals
 
 

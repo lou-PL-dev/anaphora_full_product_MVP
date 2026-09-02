@@ -1,58 +1,32 @@
-// Offline/demo fallback only. The live backend remains the source of truth.
-// App.jsx currently only carries the legacy meeting-preference state, so this
-// fallback deliberately awards at most that 10% half of Introduction
-// essentials. It must never invent the missing Your essentials half offline.
-
-const CORE_CATEGORIES = new Set([
-  'personality',
-  'lifestyle',
-  'physical_type',
-  'relationship_dynamic',
-  'love_language',
-  'dealbreakers',
-  'values',
-]);
-
-const MANDATORY_CATEGORIES = [
-  'personality',
-  'lifestyle',
-  'relationship_dynamic',
-];
-
-const MIN_CATEGORIES_PER_SIDE = 5;
+// Offline/demo mirror of the backend's ME / YOU / US readiness rules.
+const ALLOWED = {
+  ME: new Set(['personality', 'lifestyle', 'relationship_behavior', 'core_values']),
+  IDEAL_PARTNER: new Set(['personality', 'lifestyle', 'physical_type']),
+  US: new Set(['relationship_shape', 'connection_affection', 'shared_direction', 'boundaries']),
+};
 
 function coveredCategories(signals, perspective) {
-  return new Set(
-    signals
-      .filter((s) => s.perspective === perspective && CORE_CATEGORIES.has(s.category))
-      .map((s) => s.category),
-  );
-}
-
-function profileReady(covered) {
-  return (
-    MANDATORY_CATEGORIES.every((category) => covered.has(category))
-    && covered.size >= MIN_CATEGORIES_PER_SIDE
-  );
+  return new Set(signals
+    .filter((signal) => signal.perspective === perspective && ALLOWED[perspective].has(signal.category))
+    .map((signal) => signal.category));
 }
 
 export function mockReadiness(signals, discoveryDone, meetingPreference) {
-  const meCovered = coveredCategories(signals, 'ME');
-  const idealPartnerCovered = coveredCategories(signals, 'IDEAL_PARTNER');
-
+  const me = coveredCategories(signals, 'ME');
+  const ideal = coveredCategories(signals, 'IDEAL_PARTNER');
+  const us = coveredCategories(signals, 'US');
   const met = {
     introduction_essentials: false,
     meeting_preferences: !!meetingPreference,
     discovery_completed: !!discoveryDone,
-    me_profile: profileReady(meCovered),
-    ideal_partner_profile: profileReady(idealPartnerCovered),
+    me_profile: me.has('personality') && me.has('lifestyle') && me.size >= 3,
+    ideal_partner_profile: ['personality', 'lifestyle', 'physical_type'].every((category) => ideal.has(category)),
+    us_profile: us.has('relationship_shape') && us.size >= 3,
   };
-
-  const total =
-    (met.meeting_preferences ? 10 : 0)
+  const total = (met.meeting_preferences ? 10 : 0)
     + (met.discovery_completed ? 20 : 0)
-    + (met.me_profile ? 30 : 0)
-    + (met.ideal_partner_profile ? 30 : 0);
-
+    + (met.me_profile ? 20 : 0)
+    + (met.ideal_partner_profile ? 20 : 0)
+    + (met.us_profile ? 20 : 0);
   return { total, met };
 }

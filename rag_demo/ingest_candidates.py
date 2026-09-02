@@ -157,6 +157,7 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
 
                 me_count = sum(1 for s in persona.signals if s.perspective == "ME")
                 ideal_count = sum(1 for s in persona.signals if s.perspective == "IDEAL_PARTNER")
+                us_count = sum(1 for s in persona.signals if s.perspective == "US")
 
                 db.add(Candidate(
                     name=demo["name"],
@@ -172,7 +173,7 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                 prefs = demo["demographic_preferences"]
                 print(
                     f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) "
-                    f"— ME {me_count} / IDEAL_PARTNER {ideal_count} signals "
+                    f"— ME {me_count} / IDEAL_PARTNER {ideal_count} / US {us_count} signals "
                     f"— open to {','.join(prefs['gender_preferences'])} {prefs['age_min']}–{prefs['age_max']}"
                 )
             except Exception as e:

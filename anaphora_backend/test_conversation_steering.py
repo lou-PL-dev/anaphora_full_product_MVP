@@ -14,13 +14,15 @@ from app.schemas import ConversationTurnResult, CoverageField
 FAKE_TURN = ConversationTurnResult(
     key_points_just_shared=["works from home", "close with siblings"],
     coverage_fields=[
-        CoverageField.me_personality, CoverageField.me_lifestyle, CoverageField.me_relationship_dynamic,
-        CoverageField.me_love_language, CoverageField.me_values,
+        CoverageField.me_personality, CoverageField.me_lifestyle, CoverageField.me_relationship_behavior,
+        CoverageField.ideal_partner_personality, CoverageField.ideal_partner_lifestyle,
+        CoverageField.ideal_partner_physical_type, CoverageField.us_relationship_shape,
+        CoverageField.us_connection_affection, CoverageField.us_shared_direction,
     ],
     reply="Thanks for sharing that.",
 )
 
-with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN):
+with patch("app.routers.conversation_router.converse", return_value=FAKE_TURN):
     from app.main import app
     from app.database import SessionLocal
     from app.models import User, BlueprintSignal
@@ -34,9 +36,15 @@ with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN):
     db = SessionLocal()
     db.merge(User(id="steering-test-user"))
     db.commit()
-    for category in ["personality", "lifestyle", "relationship_dynamic", "physical_type", "values"]:
+    for category in ["personality", "lifestyle", "physical_type"]:
         db.add(BlueprintSignal(
             user_id="steering-test-user", perspective="IDEAL_PARTNER", category=category,
+            label="x", strength="preference", source="conversation", evidence_text="x",
+        ))
+    db.commit()
+    for category in ["relationship_shape", "connection_affection", "shared_direction"]:
+        db.add(BlueprintSignal(
+            user_id="steering-test-user", perspective="US", category=category,
             label="x", strength="preference", source="conversation", evidence_text="x",
         ))
     db.commit()
@@ -54,8 +62,7 @@ with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN):
                             json={"conversation_id": convo_id, "message": f"turn {i}"}).json()
     print("ready_to_complete after 4 ME-covering turns:", last["ready_to_complete"])
     assert last["ready_to_complete"] is True, (
-        "expected completion once ME reaches 5 categories on top of an already-covered "
-        "IDEAL_PARTNER side, got False — known coverage isn't being merged in"
+        "expected completion once ME is deep enough on top of already-covered YOU and US, got False"
     )
 
 print("\nSTEERING FIX VERIFIED — a follow-up conversation opens ME-focused and completion "

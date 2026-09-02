@@ -4,6 +4,7 @@ Operation C — reciprocal evidence-first matching.
 Iteration 4 evaluates both directions:
   MY IDEAL_PARTNER -> CANDIDATE ME
   MY ME -> CANDIDATE IDEAL_PARTNER
+  MY US <-> CANDIDATE US
 
 This module owns deterministic eligibility, broad retrieval on the user's
 IDEAL_PARTNER, and reciprocal semantic reranking down to a handful of
@@ -33,10 +34,12 @@ CATEGORY_WEIGHTS = {
     "personality": 1.15,
     "lifestyle": 1.10,
     "physical_type": 0.85,
-    "relationship_dynamic": 1.25,
-    "love_language": 0.95,
-    "dealbreakers": 1.25,
-    "values": 1.15,
+    "relationship_behavior": 1.10,
+    "core_values": 1.15,
+    "relationship_shape": 1.25,
+    "connection_affection": 1.05,
+    "shared_direction": 1.20,
+    "boundaries": 1.35,
 }
 STRENGTH_WEIGHTS = {
     "hard_requirement": 1.55,
@@ -51,6 +54,7 @@ The finalists have already passed eligibility, semantic retrieval and RECIPROCAL
 You are given evidence in two distinct directions:
 1. USER WANTS -> CANDIDATE IS: how the candidate fits what the user wants.
 2. CANDIDATE WANTS -> USER IS: how the user fits what the candidate wants.
+3. SHARED RELATIONSHIP VISION: whether the relationship both people want to create is compatible.
 
 For EACH candidate:
 - Set has_genuine_match=true only if there is enough specific evidence for a meaningful introduction.
@@ -347,12 +351,14 @@ def semantic_rerank_candidates(
     retrieved: list[tuple[Candidate, float]],
     user_ideal_signals: list[BlueprintSignal],
     user_me_signals: list[BlueprintSignal] | None = None,
+    user_us_signals: list[BlueprintSignal] | None = None,
     finalist_size: int = FINALIST_SIZE,
 ) -> list[tuple[Candidate, float, float, float | None, list[str], bool]]:
     """Reciprocal reranking while preserving directional asymmetry."""
     if not retrieved or not user_ideal_signals:
         return []
     user_me_signals = user_me_signals or []
+    user_us_signals = user_us_signals or []
 
     all_texts: list[str] = []
     text_index: dict[str, int] = {}
@@ -370,9 +376,11 @@ def semantic_rerank_candidates(
 
     add_signal_set(user_ideal_signals)
     add_signal_set(user_me_signals)
+    add_signal_set(user_us_signals)
     for candidate, _ in retrieved:
         add_signal_set(_candidate_signals(candidate, "ME"))
         add_signal_set(_candidate_signals(candidate, "IDEAL_PARTNER"))
+        add_signal_set(_candidate_signals(candidate, "US"))
 
     if not all_texts:
         return []
@@ -387,6 +395,7 @@ def semantic_rerank_candidates(
     for candidate, broad_similarity in retrieved:
         candidate_me = _candidate_signals(candidate, "ME")
         candidate_ideal = _candidate_signals(candidate, "IDEAL_PARTNER")
+        candidate_us = _candidate_signals(candidate, "US")
         forward, forward_evidence = _directional_score(user_ideal_signals, candidate_me, vector)
 
         reciprocal_complete = bool(candidate_ideal and user_me_signals)
@@ -395,9 +404,15 @@ def semantic_rerank_candidates(
         else:
             reverse, reverse_evidence = None, []
 
-        score = _reciprocal_score(forward, reverse, broad_similarity)
+        relationship_score, relationship_evidence = (
+            _directional_score(user_us_signals, candidate_us, vector)
+            if user_us_signals and candidate_us else (None, [])
+        )
+        reciprocal_score = _reciprocal_score(forward, reverse, broad_similarity)
+        score = 0.75 * reciprocal_score + 0.25 * relationship_score if relationship_score is not None else reciprocal_score
         evidence = [f"USER WANTS -> CANDIDATE IS: {item}" for item in forward_evidence]
         evidence.extend(f"CANDIDATE WANTS -> USER IS: {item}" for item in reverse_evidence)
+        evidence.extend(f"SHARED RELATIONSHIP VISION: {item}" for item in relationship_evidence)
         reranked.append((candidate, score, forward, reverse, evidence, reciprocal_complete))
 
     reranked.sort(key=lambda item: item[1], reverse=True)

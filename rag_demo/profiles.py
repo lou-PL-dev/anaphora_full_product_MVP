@@ -47,32 +47,28 @@ CANDIDATE_LABELS: dict[tuple[str, str], list[str]] = {
         "Homebody who loves a slow Sunday", "Active — runs or climbs regularly",
         "Prefers a small circle of close friends",
     ],
-    ("IDEAL_PARTNER", "relationship_dynamic"): [
-        "Real conversation over small talk", "Comfortable with independence",
-        "Direct communicator, even when it's hard", "Affectionate day-to-day",
-        "Wants to build a life together, not just date", "Gives each other space",
-        "Handles conflict by talking it through", "Plans a future together early",
-    ],
     ("IDEAL_PARTNER", "physical_type"): [
         "An easy laugh, expressive eyes", "Well-groomed and put together",
         "Athletic build", "Soft-spoken voice", "Confident posture",
         "Dresses with personality", "Warm smile that reaches the eyes",
     ],
-    ("IDEAL_PARTNER", "love_language"): [
+    ("US", "connection_affection"): [
         "Shows love through small daily gestures", "Words of affirmation matter to them",
         "Physical affection — always in reach for a hug", "Acts of service — just does the thing",
         "Quality time over gifts", "Remembers the little things you mentioned once",
     ],
-    ("IDEAL_PARTNER", "values"): [
+    ("US", "shared_direction"): [
         "Family matters to them", "Honest, even when it costs something",
         "Cares about the environment", "Ambitious about their career",
         "Generous with time and money", "Politically engaged",
         "Faith is important to them", "Values personal growth",
     ],
-    ("IDEAL_PARTNER", "dealbreakers"): [
+    ("US", "boundaries"): [
         "Not looking for something casual", "Doesn't want kids",
         "Must be a non-smoker", "Can't be actively dating other people",
         "No history of dishonesty about big things", "Must want to live locally",
+        "Won't relocate away from family", "Can't compromise on wanting kids",
+        "Needs alone time, non-negotiably",
     ],
     ("ME", "personality"): [
         "Thoughtful, slow to open up", "Quick to laugh", "Introverted, needs recharge time",
@@ -85,25 +81,22 @@ CANDIDATE_LABELS: dict[tuple[str, str], list[str]] = {
         "Splits time between two cities", "Very close with family nearby",
     ],
     ("ME", "physical_type"): [
-        "Drawn to warm, expressive faces", "Prefers a similar energy level to their own",
-        "Not fussed about height", "Likes someone who dresses with intention",
-        "Athletic types catch their eye",
+        "Warm, expressive face", "Athletic build", "Soft-spoken voice",
+        "Dresses with intention", "Confident posture", "Distinctive personal style",
     ],
-    ("ME", "relationship_dynamic"): [
+    ("ME", "relationship_behavior"): [
         "Needs depth early on", "Takes things slow", "Direct about needs",
         "Prone to overthinking a new relationship", "Values a lot of independence",
-    ],
-    ("ME", "love_language"): [
         "Shows care through acts of service", "Needs words of affirmation to feel secure",
         "Physical touch is how they connect", "Quality time matters more than gifts",
         "Shows love by remembering small details",
     ],
-    ("ME", "dealbreakers"): [
-        "Won't relocate away from family", "Not willing to date casually",
-        "Can't compromise on wanting kids", "Won't put up with dishonesty",
-        "Needs alone time, non-negotiably",
+    ("US", "relationship_shape"): [
+        "Real conversation over small talk", "Comfortable with independence",
+        "An equal partnership", "Gives each other space",
+        "Handles conflict by talking it through", "Plans a future together early",
     ],
-    ("ME", "values"): [
+    ("ME", "core_values"): [
         "Personal growth", "Financial stability", "Creative expression",
         "Community and friendship", "Career ambition", "Spiritual practice",
     ],

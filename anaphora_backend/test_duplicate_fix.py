@@ -6,13 +6,15 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-real")
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from app.schemas import ConversationTurnResult, CoverageField, ExtractionResult, PerspectiveBlueprint, SignalItem, Strength
+from app.schemas import (ConversationTurnResult, CoverageField, ExtractionResult, PerspectiveBlueprint,
+                         IdealPartnerBlueprint, RelationshipBlueprint, SignalItem, Strength)
 
 FAKE_EXTRACTION = ExtractionResult(
-    ideal_partner=PerspectiveBlueprint(
+    ideal_partner=IdealPartnerBlueprint(
         personality=[SignalItem(label="Warm", strength=Strength.strong_preference, evidence_text="warm")],
     ),
     me=PerspectiveBlueprint(),
+    us=RelationshipBlueprint(),
     narrative="Warm.",
 )
 
@@ -22,8 +24,8 @@ FAKE_TURN = ConversationTurnResult(
     reply="Tell me more?",
 )
 
-with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
-     patch("app.chains.extraction_chain.extract_blueprint", return_value=FAKE_EXTRACTION):
+with patch("app.routers.conversation_router.converse", return_value=FAKE_TURN), \
+     patch("app.routers.conversation_router.extract_blueprint", return_value=FAKE_EXTRACTION):
 
     from app.main import app
     client = TestClient(app)
@@ -49,7 +51,7 @@ with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
     print(r.status_code, r.json())
     assert r.status_code == 400, "expected 400, conversation already completed"
 
-    print("--- start a NEW conversation and complete it too (should REPLACE, not duplicate) ---")
+    print("--- start a NEW conversation with the same signal (should deduplicate) ---")
     r = client.post("/conversation/start", headers=headers)
     convo_id_2 = r.json()["conversation_id"]
     for _ in range(4):
@@ -62,4 +64,4 @@ with patch("app.chains.conversation_chain.converse", return_value=FAKE_TURN), \
     print(len(signals), "total signals in DB after 2nd conversation")
     assert len(signals) == 1, f"expected still 1 signal (replaced, not appended), got {len(signals)}"
 
-print("\nBUG FIX VERIFIED — no duplication, re-completion blocked, new conversation replaces cleanly")
+print("\nBUG FIX VERIFIED — no duplication, re-completion blocked, later conversations add without exact duplicates")
