@@ -19,17 +19,18 @@ Critical rules:
 - hard_requirement is allowed only for explicit evidence that clearly says essential/non-negotiable/dealbreaker.
 - Keep confidence conservative. Do not invent missing facts.
 - evidence_text must remain a short phrase grounded in the supplied evidence.
+- Write every signal label as a concise member-facing fragment. Never say "the user is", "the user wants", or otherwise talk about the member in the third person.
 
 Return only the categories belonging to each lens:
 - ME: personality, lifestyle, relationship_behavior, core_values, plus physical_type only when an actual self-description or profile data supports it (never ask the user for it in conversation).
 - IDEAL_PARTNER: personality, lifestyle, physical_type.
 - US: relationship_shape, connection_affection, shared_direction, boundaries.
 
-After reconciling the structured signals, write ONE flowing human-readable portrait covering who the user is, who they seek, and what they hope to build together. The narrative is only a presentation layer over the structured evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
+After reconciling the structured signals, write ONE flowing human-readable portrait exclusively about the IDEAL_PARTNER: the person the member hopes to meet. Address the member directly and describe that person naturally as "someone" or "they". Never call the member "the user", never describe the member's own personality, and do not turn the narrative into a summary of ME / IDEAL_PARTNER / US. The narrative is only a presentation layer over the IDEAL_PARTNER evidence. It must not add facts, erase tensions, or become more authoritative than the signals. Write it in the same language as the supplied evidence where that is clear."""
 
 LEGACY_TRANSCRIPT_PROMPT = """This is a legacy Anaphora conversation created before atomic observations were stored. Extract a structured Relationship Blueprint from the transcript so the user can finish their existing conversation.
 
-Use the ME / IDEAL_PARTNER / US taxonomy. ME contains personality, lifestyle, relationship_behavior, core_values, and optional self physical_type when explicitly supplied. IDEAL_PARTNER contains personality, lifestyle and physical_type. US contains relationship_shape, connection_affection, shared_direction and boundaries. Use only supported facts, preserve tensions instead of smoothing them away, assign hard_requirement only when explicitly non-negotiable, keep confidence conservative, and retain short evidence phrases. Then write a human-readable portrait as a presentation layer over those signals."""
+Use the ME / IDEAL_PARTNER / US taxonomy. ME contains personality, lifestyle, relationship_behavior, core_values, and optional self physical_type when explicitly supplied. IDEAL_PARTNER contains personality, lifestyle and physical_type. US contains relationship_shape, connection_affection, shared_direction and boundaries. Use only supported facts, preserve tensions instead of smoothing them away, assign hard_requirement only when explicitly non-negotiable, keep confidence conservative, and retain short evidence phrases. Write signal labels as concise member-facing fragments and never say "the user". Then write a human-readable portrait exclusively about the IDEAL_PARTNER, addressed directly to the member; do not summarize ME or US in that portrait."""
 
 
 def observations_from_history(history: list[dict]) -> list[ConversationObservation]:

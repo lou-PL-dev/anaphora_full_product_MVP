@@ -288,7 +288,7 @@ export default function App() {
       const st = STRENGTH_STYLE[x.strength] || STRENGTH_STYLE.preference;
       return { id: x.id, label: x.label, evidence: x.evidence_text || '', strengthLabel: st.label, dot: st.dot, pillBg: st.bg, pillFg: st.fg, onEdit: openEdit(x) };
     });
-    return { title, side, items };
+    return { title, side, perspective: persp, items };
   }).filter((g) => g.items.length);
   const br = mockReadiness(s.signals, s.discoveryDone, s.preferencesSaved ? s.gender : null);
   const readiness = s.mode === 'live' ? s.readiness : br.total;

@@ -22,6 +22,7 @@ Use the shared three-lens taxonomy:
 
 For key_points, preserve meaningful nuance, qualifiers, tensions, and contradictions instead of smoothing them into generic summaries.
 For observations, create atomic structured memories with perspective, category, concise normalized label, strength, confidence, explicit/inferred status, and a SHORT verbatim evidence phrase.
+Write observation labels as concise member-facing fragments; never label someone as "the user".
 For coverage_fields, mark only perspective-specific Blueprint fields genuinely supported by this chunk.
 For evidence_snippets, retain a few SHORT verbatim phrases from the user that are particularly useful for grounding or tone.
 Never infer facts that are not supported by the chunk. A cautious inference from a concrete example may be explicit=false; do not convert it into a hard requirement."""

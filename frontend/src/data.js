@@ -30,17 +30,17 @@ export const BASE_CATEGORIES = [
 ];
 
 export const GROUP_DEFS = [
-  ['ME', 'personality', 'MY PERSONALITY', 'ME'],
-  ['ME', 'lifestyle', 'HOW I LIVE', 'ME'],
-  ['ME', 'relationship_behavior', 'HOW I SHOW UP IN LOVE', 'ME'],
-  ['ME', 'core_values', 'WHAT GUIDES ME', 'ME'],
-  ['IDEAL_PARTNER', 'personality', 'WHO THEY ARE', 'YOU'],
-  ['IDEAL_PARTNER', 'lifestyle', 'HOW THEY LIVE', 'YOU'],
-  ['IDEAL_PARTNER', 'physical_type', 'WHAT DRAWS ME', 'YOU'],
-  ['US', 'relationship_shape', 'HOW WE WORK', 'US'],
-  ['US', 'connection_affection', 'HOW WE CONNECT', 'US'],
-  ['US', 'shared_direction', 'WHAT WE BUILD', 'US'],
-  ['US', 'boundaries', 'WHAT I CAN’T COMPROMISE ON', 'US'],
+  ['IDEAL_PARTNER', 'personality', 'WHO THEY ARE', 'IDEAL PARTNER'],
+  ['IDEAL_PARTNER', 'lifestyle', 'HOW THEY LIVE', 'IDEAL PARTNER'],
+  ['IDEAL_PARTNER', 'physical_type', 'THE LOOK & PRESENCE YOU’RE DRAWN TO', 'IDEAL PARTNER'],
+  ['US', 'relationship_shape', 'HOW WE WORK', 'YOUR RELATIONSHIP'],
+  ['US', 'connection_affection', 'HOW WE CONNECT', 'YOUR RELATIONSHIP'],
+  ['US', 'shared_direction', 'WHAT WE BUILD', 'YOUR RELATIONSHIP'],
+  ['US', 'boundaries', 'WHAT I CAN’T COMPROMISE ON', 'YOUR RELATIONSHIP'],
+  ['ME', 'personality', 'MY PERSONALITY', 'ABOUT YOU'],
+  ['ME', 'lifestyle', 'HOW I LIVE', 'ABOUT YOU'],
+  ['ME', 'relationship_behavior', 'HOW I SHOW UP IN LOVE', 'ABOUT YOU'],
+  ['ME', 'core_values', 'WHAT GUIDES ME', 'ABOUT YOU'],
 ];
 
 export const STRENGTHS = [

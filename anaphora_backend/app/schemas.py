@@ -47,7 +47,7 @@ class CoverageField(str, Enum):
 class ConversationObservation(BaseModel):
     perspective: str = Field(description="ME, IDEAL_PARTNER, or US")
     category: BaseCategory
-    label: str = Field(description="Short normalized human-readable meaning")
+    label: str = Field(description="Short member-facing fragment; never refer to 'the user'")
     strength: Strength = Strength.preference
     evidence_text: Optional[str] = Field(default=None)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
@@ -62,7 +62,7 @@ class LongInputChunkDigest(BaseModel):
 
 
 class SignalItem(BaseModel):
-    label: str
+    label: str = Field(description="Concise member-facing fragment; never refer to 'the user'")
     strength: Strength = Strength.preference
     evidence_text: Optional[str] = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
@@ -96,7 +96,7 @@ class ExtractionResult(BaseModel):
     me: PerspectiveBlueprint
     ideal_partner: IdealPartnerBlueprint
     us: RelationshipBlueprint
-    narrative: str
+    narrative: str = Field(description="A flowing portrait exclusively of the ideal partner, addressed directly to the member; never a summary of the member or the relationship taxonomy")
 
 
 class ConversationStartResponse(BaseModel):
