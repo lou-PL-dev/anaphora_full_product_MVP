@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from sqlalchemy import text
 
 from .database import Base, engine, SessionLocal
 from .models import Candidate, Discovery
@@ -17,6 +18,32 @@ if engine.dialect.name == "postgresql":
 else:
     other_tables = [t for t in Base.metadata.sorted_tables if t.name != Candidate.__tablename__]
     Base.metadata.create_all(bind=engine, tables=other_tables)
+
+
+def sync_indexes() -> None:
+    """Create indexes the model definitions declare on FK/lookup columns
+    that get filtered on nearly every request.
+
+    create_all() above only creates missing *tables* — it never alters a
+    table that already exists, so a column gaining index=True has no effect
+    on the live production DB. CREATE INDEX IF NOT EXISTS is idempotent and
+    safe to run on every boot, same spirit as sync_discovery_registry below.
+    """
+    statements = [
+        "CREATE INDEX IF NOT EXISTS ix_conversations_user_id ON conversations (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_blueprint_signals_user_id ON blueprint_signals (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_discovery_responses_user_id ON discovery_responses (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_discovery_responses_discovery_id ON discovery_responses (discovery_id)",
+        "CREATE INDEX IF NOT EXISTS ix_friend_invites_user_id ON friend_invites (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_friend_responses_invite_id ON friend_responses (invite_id)",
+        "CREATE INDEX IF NOT EXISTS ix_friend_signals_response_id ON friend_signals (response_id)",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
+sync_indexes()
 
 
 def sync_discovery_registry() -> None:

@@ -44,7 +44,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(String, primary_key=True, default=gen_id)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id"), index=True)
     messages = Column(JSON, default=list)
     status = Column(String, default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -56,7 +56,7 @@ class BlueprintSignal(Base):
     __tablename__ = "blueprint_signals"
 
     id = Column(String, primary_key=True, default=gen_id)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id"), index=True)
     perspective = Column(String)
     category = Column(String)
     dimension = Column(String, nullable=True)
@@ -97,8 +97,8 @@ class DiscoveryResponse(Base):
     __tablename__ = "discovery_responses"
 
     id = Column(String, primary_key=True, default=gen_id)
-    user_id = Column(String, ForeignKey("users.id"))
-    discovery_id = Column(String, ForeignKey("discoveries.id"))
+    user_id = Column(String, ForeignKey("users.id"), index=True)
+    discovery_id = Column(String, ForeignKey("discoveries.id"), index=True)
     question_id = Column(String)
     response = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -127,7 +127,7 @@ class FriendInvite(Base):
     __tablename__ = "friend_invites"
 
     id = Column(String, primary_key=True, default=gen_id)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id"), index=True)
     status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -138,7 +138,7 @@ class FriendResponse(Base):
     __tablename__ = "friend_responses"
 
     id = Column(String, primary_key=True, default=gen_id)
-    invite_id = Column(String, ForeignKey("friend_invites.id"))
+    invite_id = Column(String, ForeignKey("friend_invites.id"), index=True)
     friend_name = Column(String)
     raw_answers = Column(JSON)
     narrative = Column(Text, nullable=True)
@@ -152,7 +152,7 @@ class FriendSignal(Base):
     __tablename__ = "friend_signals"
 
     id = Column(String, primary_key=True, default=gen_id)
-    response_id = Column(String, ForeignKey("friend_responses.id"))
+    response_id = Column(String, ForeignKey("friend_responses.id"), index=True)
     perspective = Column(String)
     category = Column(String)
     label = Column(String)
