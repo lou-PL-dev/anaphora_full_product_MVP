@@ -2,7 +2,7 @@ export default function Convos({ convoStatus, convoCta, resumeConversation, disc
   return (
     <div className="ap-screen" style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'linear-gradient(180deg, #F2EDE6 0%, #FFFFFF 42%, #F2EDE6 100%)', padding: '64px 22px 24px' }}>
       <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: '#2F4A3F' }}>Conversations</div>
-      <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>Share only what feels useful.</div>
+      <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6, color: '#2F4A3F' }}>Anaphora is here to listen.</div>
 
       <button
         onClick={resumeConversation}
@@ -21,7 +21,7 @@ export default function Convos({ convoStatus, convoCta, resumeConversation, disc
 
       <div style={{ marginTop: 32, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ fontSize: 11, letterSpacing: '.14em', color: '#2F4A3F' }}>DISCOVERIES</div>
-        <div style={{ fontSize: 11, color: '#A69ACD' }}>Choose what feels useful</div>
+        <div style={{ fontSize: 11, color: '#A69ACD' }}>Go a little deeper</div>
       </div>
 
       <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
