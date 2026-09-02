@@ -5,9 +5,12 @@ Iteration 4 evaluates both directions:
   MY IDEAL_PARTNER -> CANDIDATE ME
   MY ME -> CANDIDATE IDEAL_PARTNER
 
-Pipeline:
-  eligibility -> broad retrieval on the user's IDEAL_PARTNER -> reciprocal
-  semantic reranking -> 6 finalists -> grounded LLM judgment -> surface 1.
+This module owns eligibility, broad retrieval on the user's IDEAL_PARTNER,
+and reciprocal semantic reranking down to a handful of finalists. The final
+grounded judgment that turns finalists into a surfaced introduction lives in
+matching_chain_v5.py (via relationship_reasoning_chain) — see that module
+for the live orchestration. judge_and_explain_candidates() below is the
+original Iteration 4 judgment step, kept and tested as a standalone scorer.
 
 The two directional scores remain visible to the internal ranking logic rather
 than being flattened into a naive average. A candidate who fits the user very
@@ -24,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import BlueprintSignal, Candidate
-from ..schemas import CandidateOut, FitLevel, MatchExplanationsResult, MatchOut, MatchSection
+from ..schemas import MatchExplanationsResult, MatchSection
 
 BROAD_RETRIEVAL_SIZE = 24
 FINALIST_SIZE = 6
@@ -381,75 +384,3 @@ def judge_and_explain_candidates(
         item.candidate_id: (item.has_genuine_match, item.sections if item.has_genuine_match else [])
         for item in result.explanations
     }
-
-
-def find_matches(
-    db: Session,
-    user_narrative: str,
-    user_ideal_partner_signals: list[BlueprintSignal],
-    user_me_signals: list[BlueprintSignal] | None = None,
-    gender_preference: str | None = None,
-    age_min: int | None = None,
-    age_max: int | None = None,
-) -> list[MatchOut]:
-    """Return at most one reciprocal introduction."""
-    if not user_ideal_partner_signals:
-        return []
-    user_me_signals = user_me_signals or []
-
-    query_text = _profile_embedding_text(user_ideal_partner_signals)
-    query_embedding = embed_text(query_text)
-    retrieved = retrieve_candidates(
-        db,
-        query_embedding,
-        k=BROAD_RETRIEVAL_SIZE,
-        gender_preference=gender_preference,
-        age_min=age_min,
-        age_max=age_max,
-    )
-    finalists = semantic_rerank_candidates(
-        retrieved,
-        user_ideal_partner_signals,
-        user_me_signals=user_me_signals,
-        finalist_size=FINALIST_SIZE,
-    )
-
-    user_context = (
-        "USER IDEAL_PARTNER:\n" + _profile_embedding_text(user_ideal_partner_signals)
-        + "\n\nUSER ME:\n" + _profile_embedding_text(user_me_signals)
-    )
-    hard_requirements = [
-        f"{s.category}: {s.label}"
-        for s in user_ideal_partner_signals
-        if s.strength == "hard_requirement" and (s.confidence is None or s.confidence >= 0.70)
-    ]
-    judged = judge_and_explain_candidates(
-        user_context,
-        [(candidate, evidence, reciprocal_complete) for candidate, _score, _forward, _reverse, evidence, reciprocal_complete in finalists],
-        hard_requirements=hard_requirements,
-    )
-
-    genuine = [
-        (candidate, score, forward, reverse, evidence, reciprocal_complete, sections)
-        for candidate, score, forward, reverse, evidence, reciprocal_complete in finalists
-        for has_genuine, sections in [judged.get(candidate.id, (False, []))]
-        if has_genuine and sections
-    ][:MAX_MATCHES_SHOWN]
-
-    return [
-        MatchOut(
-            candidate=CandidateOut.model_validate(candidate),
-            fit=(
-                FitLevel.strong_fit
-                if reciprocal_complete
-                and reverse is not None
-                and forward >= MIN_RECIPROCAL_DIRECTION_SCORE
-                and reverse >= MIN_RECIPROCAL_DIRECTION_SCORE
-                and score >= STRONG_FIT_THRESHOLD
-                and len(evidence) >= 4
-                else FitLevel.worth_exploring
-            ),
-            sections=sections,
-        )
-        for candidate, score, forward, reverse, evidence, reciprocal_complete, sections in genuine
-    ]
