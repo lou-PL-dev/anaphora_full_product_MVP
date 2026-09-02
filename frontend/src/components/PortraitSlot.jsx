@@ -6,7 +6,7 @@ export default function PortraitSlot({ src, label, style }) {
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2F4A3F', ...style }}>
       {src ? (
-        <img src={src} alt={label || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={src} alt={label || ''} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#F2EDE6' }} />
       ) : (
         <span style={{ fontSize: 11, letterSpacing: '.04em', opacity: 0.65, textAlign: 'center', padding: '0 12px' }}>{label}</span>
       )}
