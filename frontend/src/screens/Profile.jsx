@@ -170,7 +170,7 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
 
         <div style={{ marginTop: 18, fontSize: 12.5, color: SAGE }}>Age</div>
         <div style={{ marginTop: 9, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <input type="number" min="18" max="99" value={userAge} onChange={(e) => { setUserAge(e.target.value); setEssentialsSaved(false); }} style={{ width: 88, padding: '10px 11px', borderRadius: 12, border: `1px solid ${SKY}`, color: SAGE, fontSize: 16, outline: 'none' }} />
+          <input type="number" min="18" max="99" value={userAge} onChange={(e) => { const raw = e.target.value; setUserAge(raw === '' ? '' : Math.min(99, Math.max(18, Number(raw)))); setEssentialsSaved(false); }} style={{ width: 88, padding: '10px 11px', borderRadius: 12, border: `1px solid ${SKY}`, color: SAGE, fontSize: 16, outline: 'none' }} />
           <div style={{ fontSize: 10.5, lineHeight: 1.45, color: LAV }}>Used only for introduction eligibility.</div>
         </div>
 
@@ -236,7 +236,7 @@ export default function Profile({ openPlans, goPrivacy, goTerms, signalCount, go
 
       <button onClick={openPlans} style={{ marginTop: 14, width: '100%', textAlign: 'left', padding: 20, borderRadius: 20, border: 'none', background: 'linear-gradient(140deg, rgba(166,154,205,.18), #DDEAE6)', cursor: 'pointer' }}>
         <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 19, color: SAGE }}>Anaphora+</div>
-        <div style={{ marginTop: 6, fontSize: 12.5, color: SAGE }}>More Discoveries, deeper intro explanations.</div>
+        <div style={{ marginTop: 6, fontSize: 12.5, color: SAGE }}>More Discoveries, deeper match explanations.</div>
       </button>
 
       <div style={{ marginTop: 22, textAlign: 'center', fontSize: 11, color: LAV, letterSpacing: '.02em' }}>
