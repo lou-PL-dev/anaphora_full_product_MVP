@@ -62,20 +62,12 @@ export default function App() {
     api('GET', '/discovery/' + DEFAULT_DISCOVERY_ID).then((r) => {
       if (r && r.questions) patch({ questions: r.questions, discoveryTitle: r.title || 'What kind of life are you building?' });
     });
-    // Rehydrate everything the backend already knows for this device's uid,
-    // so a page reload doesn't visually reset progress that still exists.
     api('GET', '/blueprint').then((r) => {
       if (r) patch({ signals: r.signals || [], narrative: r.narrative || '', hasExistingBlueprint: !!(r.signals && r.signals.length) });
     });
     api('GET', '/readiness').then((r) => {
       if (!r) return;
-      // A returning user with existing progress should land on Home, not
-      // the "Begin" screen — but only if they haven't already navigated
-      // away while this was in flight.
-      patch((prev) => ({
-        readiness: r.readiness_pct,
-        screen: r.readiness_pct > 0 && prev.screen === 'welcome' ? 'home' : prev.screen,
-      }));
+      patch((prev) => ({ readiness: r.readiness_pct, screen: r.readiness_pct > 0 && prev.screen === 'welcome' ? 'home' : prev.screen }));
     });
     api('GET', '/preferences').then((r) => {
       if (r && r.gender_preference) patch({ gender: r.gender_preference, ageMin: r.age_min ?? 18, ageMax: r.age_max ?? 99, preferencesSaved: true });
@@ -86,18 +78,15 @@ export default function App() {
         patch({ completedDiscoveries: completed, discoveryDone: completed.includes(DEFAULT_DISCOVERY_ID) });
       }
     });
-    api('GET', '/friends').then((r) => {
-      if (Array.isArray(r)) patch({ friends: r });
-    });
+    api('GET', '/friends').then((r) => { if (Array.isArray(r)) patch({ friends: r }); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   useEffect(() => {
     const el = chatEndRef.current;
     if (el && el.parentElement) el.parentElement.scrollTop = el.parentElement.scrollHeight;
   }, [s.messages, s.thinking]);
-  // Keep the Home "Discover something new" suggestion pointed at a Discovery
-  // the user hasn't completed yet — re-pick only when the current pick is
-  // stale (already done, or none chosen yet); null once every Discovery is done.
+
   useEffect(() => {
     const notDone = DISCOVERY_LIBRARY.filter((d) => !s.completedDiscoveries.includes(d.id));
     if (notDone.length === 0) {
@@ -121,8 +110,6 @@ export default function App() {
     if (r) patch({ convoId: r.conversation_id, messages: [{ role: 'assistant', content: r.message }] });
     else patch({ error: { screen: 'chat', message: "Couldn't reach the backend to start the conversation. Check it's running, then retry." } });
   };
-  // A completed conversation can't take more messages (the backend rejects them) —
-  // "Continue"/"Add more" should open a new one instead of reusing the dead id.
   const resumeConversation = () => { if (s.messages.length && !s.convoCompleted) patch({ screen: 'chat' }); else beginConversation(); };
   const onDraft = (e) => patch({ draft: e.target.value });
   const setDraft = (text) => patch({ draft: text });
@@ -140,23 +127,9 @@ export default function App() {
     const wasFollowUp = s.hasExistingBlueprint;
     const r = await api('POST', '/conversation/complete', { conversation_id: s.convoId }, TIMEOUT_EXTRACTION);
     if (r) {
-      // r.signals/r.narrative are only this completion's own delta (a follow-up
-      // "Add more" conversation replaces just its own categories server-side,
-      // per-category, and appends to the narrative) — re-fetch the full,
-      // merged picture so Home/Blueprint don't regress to a partial view.
       const full = await api('GET', '/blueprint');
-      patch({
-        signals: full ? full.signals || [] : r.signals,
-        narrative: full ? full.narrative || '' : r.narrative,
-        readiness: r.readiness_pct,
-        convoCompleted: true,
-        hasExistingBlueprint: true,
-        wasFollowUp,
-        screen: 'enough',
-      });
-    } else {
-      patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap the button to try again." } });
-    }
+      patch({ signals: full ? full.signals || [] : r.signals, narrative: full ? full.narrative || '' : r.narrative, readiness: r.readiness_pct, convoCompleted: true, hasExistingBlueprint: true, wasFollowUp, screen: 'enough' });
+    } else patch({ error: { screen: 'chat', message: "Couldn't build your Blueprint — the request timed out or the backend is unreachable. Tap the button to try again." } });
   };
 
   const fetchMatches = async () => {
@@ -197,11 +170,10 @@ export default function App() {
       response = v < 45 ? qq.spectrum[0] : (v > 55 ? qq.spectrum[1] : 'Balanced between ' + qq.spectrum[0] + ' and ' + qq.spectrum[1]);
       response += ' (' + v + '/100 toward ' + qq.spectrum[1] + ')';
     } else if (qq.options) {
+      // Keep the human-readable choice in persistence/admin instead of the
+      // internal option id ("a", "b", "hold_listen", etc.).
       if (String(a).startsWith('Other: ')) response = String(a).slice(7).trim();
-      else {
-        const o = qq.options.find((x) => x.label === a);
-        response = o ? o.id : String(a);
-      }
+      else response = String(a);
     }
     return { user_id: uidRef.current, question_id: qq.id, response };
   });
@@ -248,24 +220,13 @@ export default function App() {
     if (r) patch({ friendReview: r, friendReviewLoading: false });
     else patch({ friendReviewLoading: false, error: { screen: 'friendReview', message: "Couldn't load this friend's answers." } });
   };
-  const toggleFriendSignal = (signalId) => patch((prev) => ({
-    friendReviewSelected: prev.friendReviewSelected.includes(signalId)
-      ? prev.friendReviewSelected.filter((id) => id !== signalId)
-      : prev.friendReviewSelected.concat(signalId),
-  }));
+  const toggleFriendSignal = (signalId) => patch((prev) => ({ friendReviewSelected: prev.friendReviewSelected.includes(signalId) ? prev.friendReviewSelected.filter((id) => id !== signalId) : prev.friendReviewSelected.concat(signalId) }));
   const commitFriendReview = async () => {
     if (s.friendCommitting || !s.friendReviewInviteId) return;
     patch({ friendCommitting: true, error: null });
     const r = await api('POST', '/friends/' + s.friendReviewInviteId + '/commit', { accepted_signal_ids: s.friendReviewSelected });
-    if (r) {
-      patch((prev) => ({
-        friendCommitting: false, friendCommitted: true, friendAddedCount: r.added_signals.length,
-        signals: prev.signals.concat(r.added_signals), readiness: r.readiness_pct,
-        friends: prev.friends.map((f) => (f.id === prev.friendReviewInviteId ? { ...f, reviewed: true } : f)),
-      }));
-    } else {
-      patch({ friendCommitting: false, error: { screen: 'friendReview', message: "Couldn't save your choices. Please try again." } });
-    }
+    if (r) patch((prev) => ({ friendCommitting: false, friendCommitted: true, friendAddedCount: r.added_signals.length, signals: prev.signals.concat(r.added_signals), readiness: r.readiness_pct, friends: prev.friends.map((f) => (f.id === prev.friendReviewInviteId ? { ...f, reviewed: true } : f)) }));
+    else patch({ friendCommitting: false, error: { screen: 'friendReview', message: "Couldn't save your choices. Please try again." } });
   };
 
   const resetAll = () => {
@@ -288,15 +249,11 @@ export default function App() {
   const copyInvite = async () => {
     try { await navigator.clipboard.writeText(inviteLink); }
     catch (e) {
-      const ta = document.createElement('textarea');
-      ta.value = inviteLink; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
+      const ta = document.createElement('textarea'); ta.value = inviteLink; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
       try { document.execCommand('copy'); } catch (e2) { /* clipboard unavailable */ }
       document.body.removeChild(ta);
     }
-    patch({ copied: true });
-    clearTimeout(copyTimerRef.current);
-    copyTimerRef.current = setTimeout(() => patch({ copied: false }), 2200);
+    patch({ copied: true }); clearTimeout(copyTimerRef.current); copyTimerRef.current = setTimeout(() => patch({ copied: false }), 2200);
   };
 
   const accent = LAV;
@@ -342,11 +299,7 @@ export default function App() {
   }
   const otherSelected = ans === '__OTHER__' || String(ans || '').startsWith('Other: ');
   const otherValue = String(ans || '').startsWith('Other: ') ? String(ans).slice(7) : '';
-  const answered = isText
-    ? !!String(ans || '').trim()
-    : otherSelected
-      ? otherValue.trim().length > 0
-      : ans !== undefined;
+  const answered = isText ? !!String(ans || '').trim() : otherSelected ? otherValue.trim().length > 0 : ans !== undefined;
   const last = s.dqIdx === s.questions.length - 1;
   const readinessCopy = readiness >= 90 ? ['Ready when you are', 'We know enough to look for people who actually fit.'] : readiness >= 60 ? ['Coming into focus', 'A little more and intros start making real sense.'] : readiness > 0 ? ['A good beginning', 'Every answer sharpens who we look for.'] : ['Nothing yet', 'One conversation is all it takes to start.'];
   const dqOptions = (q.options || []).map((o) => {
