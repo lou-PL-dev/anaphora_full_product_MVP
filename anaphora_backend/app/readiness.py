@@ -77,7 +77,7 @@ def compute_readiness(db: Session, user_id: str) -> tuple[int, dict]:
     me_covered = _coverage(signals, "ME")
     ideal_partner_covered = _coverage(signals, "IDEAL_PARTNER")
 
-    your_essentials_met = bool(user and user.gender and user.age)
+    your_essentials_met = bool(user and user.gender and user.birth_date)
     meeting_preferences_met = bool(
         user and user.gender_preference and user.preferred_age_range
     )
