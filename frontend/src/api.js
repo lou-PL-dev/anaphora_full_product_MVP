@@ -78,9 +78,10 @@ export async function apiCall(userId, method, path, body, timeoutMs = TIMEOUT_QU
   }
 }
 
-export async function adminApiCall(secret, path) {
+export async function adminApiCall(secret, path, method = 'GET') {
   try {
     const res = await fetch(API_BASE + path, {
+      method,
       headers: { 'X-Admin-Secret': secret },
     });
     const data = await res.json().catch(() => null);
