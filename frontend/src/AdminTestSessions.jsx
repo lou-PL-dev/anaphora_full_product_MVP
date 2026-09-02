@@ -24,6 +24,7 @@ export default function AdminTestSessions() {
   const [sessions, setSessions] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState('');
 
   const loadSessions = async (candidateSecret = secret) => {
@@ -49,6 +50,20 @@ export default function AdminTestSessions() {
     setSelected(r.data);
   };
 
+  const clearTestData = async () => {
+    const confirmed = window.confirm('Clear all tester data? This cannot be undone. Candidates and Discovery definitions will be kept.');
+    if (!confirmed) return;
+    setClearing(true); setError('');
+    const r = await adminApiCall(secret, '/admin/test-sessions', 'DELETE');
+    setClearing(false);
+    if (!r.ok) {
+      setError('Could not clear tester data.');
+      return;
+    }
+    setSelected(null);
+    setSessions([]);
+  };
+
   if (!sessionStorage.getItem('anaphora_admin_secret') && !sessions.length) {
     return (
       <div style={{ minHeight: '100vh', background: SAND, display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'Inter, sans-serif', color: SAGE }}>
@@ -68,7 +83,10 @@ export default function AdminTestSessions() {
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
           <div><div style={{ fontFamily: "'Playfair Display', serif", fontSize: 32 }}>Tester sessions</div><div style={{ marginTop: 5, fontSize: 12.5, opacity: .7 }}>{sessions.length} anonymous testers</div></div>
-          <button onClick={() => loadSessions()} style={{ border: `1px solid ${SKY}`, borderRadius: 999, padding: '8px 14px', background: '#fff', color: SAGE, cursor: 'pointer' }}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => loadSessions()} style={{ border: `1px solid ${SKY}`, borderRadius: 999, padding: '8px 14px', background: '#fff', color: SAGE, cursor: 'pointer' }}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+            <button onClick={clearTestData} disabled={clearing || !sessions.length} style={{ border: `1px solid ${SKY}`, borderRadius: 999, padding: '8px 14px', background: 'transparent', color: SAGE, opacity: clearing || !sessions.length ? .45 : .8, cursor: clearing || !sessions.length ? 'default' : 'pointer' }}>{clearing ? 'Clearing…' : 'Clear test data'}</button>
+          </div>
         </div>
 
         {error && <div style={{ marginBottom: 16, fontSize: 13, color: '#8B3A3A' }}>{error}</div>}
