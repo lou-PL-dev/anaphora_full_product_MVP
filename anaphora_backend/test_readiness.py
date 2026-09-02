@@ -1,4 +1,4 @@
-"""Regression tests for the four matching-readiness gates.
+"""Regression tests for the four introduction-readiness areas.
 
 Run from anaphora_backend with: pytest test_readiness.py -q
 No OpenAI calls or production database are involved.
@@ -22,7 +22,6 @@ Session = sessionmaker(bind=engine)
 
 def _new_db():
     Base.metadata.drop_all(bind=engine)
-    # Candidate contains pgvector and cannot compile on SQLite; mirror main.py.
     tables = [table for table in Base.metadata.sorted_tables if table.name != "candidates"]
     Base.metadata.create_all(bind=engine, tables=tables)
     db = Session()
@@ -31,10 +30,13 @@ def _new_db():
     return db
 
 
-def _user(db, *, preferences=False):
+def _user(db, *, essentials=False, preferences=False):
     user = User(id=f"u-{uuid.uuid4()}")
+    if essentials:
+        user.gender = "woman"
+        user.age = 37
     if preferences:
-        user.gender_preference = "any"
+        user.gender_preference = "men,nonbinary"
         user.preferred_age_range = "30-45"
     db.add(user)
     db.commit()
@@ -83,10 +85,35 @@ def test_discovery_only_is_twenty():
     db.close()
 
 
-def test_preferences_only_are_twenty():
+def test_your_essentials_only_are_ten_and_parent_not_met():
+    db = _new_db()
+    user = _user(db, essentials=True)
+    score, breakdown = compute_readiness(db, user.id)
+    assert score == 10
+    intro = breakdown["introduction_essentials"]
+    assert intro["earned"] == 10
+    assert intro["met"] is False
+    assert intro["parts"]["your_essentials"]["met"] is True
+    assert intro["parts"]["meeting_preferences"]["met"] is False
+    db.close()
+
+
+def test_meeting_preferences_only_are_ten_and_parent_not_met():
     db = _new_db()
     user = _user(db, preferences=True)
-    assert compute_readiness(db, user.id)[0] == 20
+    score, breakdown = compute_readiness(db, user.id)
+    assert score == 10
+    assert breakdown["introduction_essentials"]["met"] is False
+    db.close()
+
+
+def test_both_introduction_essentials_are_twenty_and_met():
+    db = _new_db()
+    user = _user(db, essentials=True, preferences=True)
+    score, breakdown = compute_readiness(db, user.id)
+    assert score == 20
+    assert breakdown["introduction_essentials"]["earned"] == 20
+    assert breakdown["introduction_essentials"]["met"] is True
     db.close()
 
 
@@ -124,9 +151,9 @@ def test_missing_mandatory_category_does_not_unlock_profile_gate():
     db.close()
 
 
-def test_all_four_gates_reach_one_hundred():
+def test_all_four_areas_reach_one_hundred():
     db = _new_db()
-    user = _user(db, preferences=True)
+    user = _user(db, essentials=True, preferences=True)
     _discovery(db, user.id)
     _ready_side(db, user.id, "ME")
     _ready_side(db, user.id, "IDEAL_PARTNER")
