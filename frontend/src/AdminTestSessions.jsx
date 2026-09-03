@@ -179,6 +179,13 @@ function SessionDetail({ data, onBack, secret }) {
                 <div><b>{matches.finalists_that_would_reach_relationship_reasoning}</b><div style={{ fontSize: 10.5, opacity: .65 }}>strong enough to be considered a real intro</div></div>
               </div>
 
+              {matches.user_signal_counts && (
+                <div style={{ fontSize: 12, opacity: .7 }}>
+                  This tester's own Blueprint: {matches.user_signal_counts.me} ME signals · {matches.user_signal_counts.ideal_partner} IDEAL_PARTNER signals · {matches.user_signal_counts.us} US signals
+                  {matches.user_signal_counts.us === 0 && ' — no US signals means less shared-vision evidence is possible against any candidate.'}
+                </div>
+              )}
+
               {(matches.finalists_after_reranking || []).length ? (
                 <div>
                   <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: LAV, marginBottom: 8 }}>Closest candidates</div>
