@@ -214,3 +214,48 @@ def get_test_session(
             for e in events
         ],
     }
+
+
+@router.get("/admin/test-sessions/{user_id}/matches-debug")
+def get_matches_debug(
+    user_id: str,
+    _admin: None = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """Why a tester saw no matches — real pipeline numbers, not a guess.
+
+    Runs the same eligibility + retrieval + reranking stages as GET
+    /matches, but reports the count/scores at each stage instead of only
+    the final result, and skips the relationship-reasoning LLM call (the
+    deterministic stages already show whether anything would even reach
+    it). Requires readiness — deliberately does NOT bypass that gate, so
+    the numbers reflect exactly what the member's own /matches call sees.
+    """
+    from ..chains.matching_chain_v5 import debug_find_matches
+    from ..routers.matching_router import _preferred_age_bounds
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "Tester not found")
+
+    readiness, _breakdown = compute_readiness(db, user_id)
+    if readiness < 100:
+        return {"readiness": readiness, "error": "Readiness is below 100% — /matches never attempts matching yet."}
+
+    signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user_id).all()
+    age_min, age_max = _preferred_age_bounds(user.preferred_age_range)
+    result = debug_find_matches(
+        db,
+        [s for s in signals if s.perspective == "IDEAL_PARTNER"],
+        user_me_signals=[s for s in signals if s.perspective == "ME"],
+        user_us_signals=[s for s in signals if s.perspective == "US"],
+        gender_preference=user.gender_preference,
+        age_min=age_min,
+        age_max=age_max,
+        user_gender=user.gender,
+        user_age=user.age,
+    )
+    result["readiness"] = readiness
+    result["user_own_demographics"] = {"gender": user.gender, "age": user.age}
+    result["user_stated_preference"] = {"gender_preference": user.gender_preference, "age_min": age_min, "age_max": age_max}
+    return result

@@ -187,3 +187,94 @@ def find_matches(
         )
         for candidate, fit, sections in genuine
     ]
+
+
+def debug_find_matches(
+    db: Session,
+    user_ideal_partner_signals: list[BlueprintSignal],
+    user_me_signals: list[BlueprintSignal] | None = None,
+    user_us_signals: list[BlueprintSignal] | None = None,
+    gender_preference: str | None = None,
+    age_min: int | None = None,
+    age_max: int | None = None,
+    user_gender: str | None = None,
+    user_age: int | None = None,
+) -> dict:
+    """Same pipeline as find_matches, but reports WHERE candidates fall out
+    at each stage instead of only the final result — for the admin tester
+    tool, so a "no matches" report can be diagnosed from real numbers
+    (pool size, eligibility, reranking scores) instead of guessing whether
+    the candidate pool needs regenerating or is just too narrow for this
+    member's stated preferences. Skips the relationship-reasoning LLM call
+    (the final, most expensive gate) since the deterministic stages below
+    already show whether anything would even reach it.
+    """
+    from ..models import Candidate
+
+    pool_total = db.query(Candidate).count()
+    user_me_signals = user_me_signals or []
+    user_us_signals = user_us_signals or []
+
+    if not user_ideal_partner_signals:
+        return {
+            "candidate_pool_total": pool_total,
+            "error": "No IDEAL_PARTNER signals on this Blueprint — matching never runs without them.",
+        }
+
+    query_text = _profile_embedding_text(user_ideal_partner_signals)
+    query_embedding = embed_text(query_text)
+    retrieved = retrieve_candidates(
+        db, query_embedding, k=BROAD_RETRIEVAL_SIZE,
+        gender_preference=gender_preference, age_min=age_min, age_max=age_max,
+    )
+    after_direction1 = len(retrieved)
+
+    retrieved = [
+        (candidate, similarity) for candidate, similarity in retrieved
+        if candidate_accepts_user(candidate, user_gender, user_age)
+    ]
+    after_direction2 = len(retrieved)
+
+    finalists = semantic_rerank_candidates(
+        retrieved, user_ideal_partner_signals,
+        user_me_signals=user_me_signals, user_us_signals=user_us_signals,
+        finalist_size=FINALIST_SIZE,
+    )
+
+    finalist_rows = []
+    passed_ceiling = 0
+    for candidate, score, forward, reverse, evidence, reciprocal_complete in finalists:
+        ceiling = deterministic_fit_ceiling(score, forward, reverse, evidence, reciprocal_complete)
+        if ceiling is not None:
+            passed_ceiling += 1
+        finalist_rows.append({
+            "candidate_id": candidate.id,
+            "candidate_name": candidate.name,
+            "score": round(score, 3),
+            "forward": round(forward, 3),
+            "reverse": round(reverse, 3) if reverse is not None else None,
+            "evidence_count": len(evidence),
+            "reciprocal_complete": reciprocal_complete,
+            "would_pass_deterministic_gate": ceiling.value if ceiling else None,
+        })
+
+    return {
+        "candidate_pool_total": pool_total,
+        "user_signal_counts": {
+            "ideal_partner": len(user_ideal_partner_signals),
+            "me": len(user_me_signals),
+            "us": len(user_us_signals),
+        },
+        "after_direction1_demographic_filter": after_direction1,
+        "after_direction2_reverse_eligibility": after_direction2,
+        "finalists_after_reranking": finalist_rows,
+        "finalists_that_would_reach_relationship_reasoning": passed_ceiling,
+        "thresholds": {
+            "worth_exploring_score": WORTH_EXPLORING_THRESHOLD,
+            "strong_fit_score": STRONG_FIT_THRESHOLD,
+            "min_worth_direction_score": MIN_WORTH_DIRECTION_SCORE,
+            "min_reciprocal_direction_score": MIN_RECIPROCAL_DIRECTION_SCORE,
+            "min_worth_evidence": MIN_WORTH_EVIDENCE,
+            "min_strong_evidence": MIN_STRONG_EVIDENCE,
+        },
+    }
