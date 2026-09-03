@@ -2,11 +2,19 @@
 // anonymous per-device identity header the backend expects.
 export const API_BASE = import.meta.env.VITE_API_BASE || 'https://anaphora-app.onrender.com';
 
-export const TIMEOUT_QUICK = 45000;
-export const TIMEOUT_CHAT_REPLY = 20000;
-export const TIMEOUT_INSIGHT = 45000;
-export const TIMEOUT_EXTRACTION = 45000;
-export const TIMEOUT_MATCHES = 45000;
+// Render's free tier spins the backend down after ~15 min idle and can
+// take up to ~50s to wake back up on the next request (see README). A
+// bare 45s budget is LESS than that worst-case wake time alone, so a
+// cold-start call — especially /conversation/complete, which also runs a
+// real structured-output LLM call on top of the wake — was essentially
+// guaranteed to time out client-side even when the backend would have
+// succeeded seconds later. Every timeout below starts from that ~50s
+// floor and adds real headroom for the endpoint's own work.
+export const TIMEOUT_QUICK = 60000;
+export const TIMEOUT_CHAT_REPLY = 30000;
+export const TIMEOUT_INSIGHT = 75000;
+export const TIMEOUT_EXTRACTION = 75000;
+export const TIMEOUT_MATCHES = 75000;
 
 const UID_KEY = 'anaphora_uid';
 
