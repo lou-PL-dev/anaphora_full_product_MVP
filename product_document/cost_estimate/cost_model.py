@@ -22,9 +22,10 @@ if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
 from app.chains.conversation_chain import SYSTEM_PROMPT as CONVO_SYSTEM_PROMPT
-from app.chains.extraction_chain import EXTRACTION_SYSTEM_PROMPT
+from app.chains.extraction_chain import LEGACY_TRANSCRIPT_PROMPT
 from app.chains.discovery_chain import SYNTHESIS_SYSTEM_PROMPT
 from app.chains.matching_chain import MATCH_SYSTEM_PROMPT
+from app.blueprint_canonicalizer import CANONICALIZATION_SYSTEM_PROMPT
 
 # --- Pricing ($ per 1M tokens) ----------------------------------------------
 # Sourced via web search against aggregator pricing pages (cloudzero.com,
@@ -101,6 +102,27 @@ ASSUMPTIONS = {
     "match_candidates_per_request": 5,   # k in matching_router.get_matches's default
     "match_explanation_output_tokens_per_candidate": 35,
     "candidate_text_tokens": 120,        # narrative + signal labels, embedded text length
+    # --- Blueprint canonicalization (blueprint_canonicalizer.py) -----------
+    # As of the source-preserving-evidence architecture, every conversation
+    # turn already returns its own atomic ConversationObservation rows as
+    # part of the SAME structured conversation_chain.converse() call — see
+    # conversation_router.py::complete_conversation, which uses those
+    # per-turn observations directly and only falls back to a separate
+    # extraction_chain.extract_blueprint() call for conversations created
+    # before per-turn observations existed. So a MODERN journey pays no
+    # separate "extraction" LLM call at all; extraction_cost() below is kept
+    # only to price that legacy fallback path, and is excluded from the
+    # current per-journey total.
+    "observations_per_conversation": 10,  # atomic observations across 6 turns — ~1.5-2/turn, since one statement can support multiple fields
+    "discovery_evidence_rows": 4,          # one evidence row per question, typical of the 4-question Discoveries in discovery_registry.py
+    # Measured directly: json.dumps() of one representative BlueprintEvidence
+    # payload row, the same shape canonicalize_evidence() actually sends
+    # (id/perspective/category/label/strength/source/evidence_text/
+    # confidence/explicit/supersedes_evidence_ids) — see product_document/
+    # cost_estimate/README or rerun this script to reproduce.
+    "evidence_row_input_tokens": 93,
+    "canonical_signal_output_tokens": 34,  # measured: json.dumps() of one representative CanonicalSignalDraft
+    "canonicalization_narrative_tokens": 60,
 }
 
 
@@ -131,12 +153,46 @@ def conversation_cost() -> tuple[float, dict]:
 
 
 def extraction_cost() -> tuple[float, dict]:
+    """LEGACY FALLBACK ONLY, priced for reference — NOT part of the current
+    per-user-journey total. conversation_router.py::complete_conversation
+    calls extraction_chain.extract_blueprint() only when a conversation
+    predates per-turn observations (observations_from_history() finds none
+    stored on any user message); extract_blueprint() then always resolves to
+    _legacy_extract(), which scans the raw transcript with
+    LEGACY_TRANSCRIPT_PROMPT (extraction_chain.py's other reconciliation
+    path, reconcile_blueprint()/RECONCILIATION_SYSTEM_PROMPT, is reachable
+    only when observations already exist — which the router never triggers,
+    since it already checked and took the direct-evidence path instead). A
+    modern conversation carries structured ConversationObservation rows from
+    every conversation_chain.converse() call, so it never reaches this cost
+    at all — see canonicalization_cost() for what a modern journey actually
+    pays."""
     turns = ASSUMPTIONS["avg_user_turns_per_conversation"]
     transcript_tokens = turns * (ASSUMPTIONS["avg_user_message_tokens"] + ASSUMPTIONS["avg_ai_reply_tokens"])
-    input_tokens = count_tokens(EXTRACTION_SYSTEM_PROMPT) + transcript_tokens
+    input_tokens = count_tokens(LEGACY_TRANSCRIPT_PROMPT) + transcript_tokens
     output_tokens = ASSUMPTIONS["extraction_output_tokens"]
     return cost("gpt-4o-mini", input_tokens, output_tokens), {
         "input_tokens": input_tokens, "output_tokens": output_tokens,
+    }
+
+
+def canonicalization_cost(evidence_count: int) -> tuple[float, dict]:
+    """One blueprint_canonicalizer.rebuild_blueprint() call. It re-sends a
+    member's ENTIRE active BlueprintEvidence history in one LLM call every
+    time — not just the newly added rows — so cost grows with total
+    accumulated evidence, the same shape finding as conversation_cost()'s
+    resent history. It fires after every Blueprint mutation: conversation
+    complete, Discovery submit, friend-signal commit, and signal correction.
+    Model: gpt-4o-mini (blueprint_canonicalizer.get_chat_llm(temperature=0)
+    with no model override -> settings.openai_model default)."""
+    system_tokens = count_tokens(CANONICALIZATION_SYSTEM_PROMPT)
+    input_tokens = system_tokens + evidence_count * ASSUMPTIONS["evidence_row_input_tokens"]
+    output_tokens = (
+        evidence_count * ASSUMPTIONS["canonical_signal_output_tokens"]
+        + ASSUMPTIONS["canonicalization_narrative_tokens"]
+    )
+    return cost("gpt-4o-mini", input_tokens, output_tokens), {
+        "evidence_count": evidence_count, "input_tokens": input_tokens, "output_tokens": output_tokens,
     }
 
 
@@ -166,7 +222,7 @@ def candidate_ingestion_cost_per_candidate() -> float:
     extraction call (same shape as a real extraction, minus the multi-turn
     conversation) + one embedding."""
     narrative_gen = cost("gpt-4o", 300, 120)
-    extraction = cost("gpt-4o-mini", count_tokens(EXTRACTION_SYSTEM_PROMPT) + 150, 300)
+    extraction = cost("gpt-4o-mini", count_tokens(LEGACY_TRANSCRIPT_PROMPT) + 150, 300)
     embedding = cost("text-embedding-3-small", ASSUMPTIONS["candidate_text_tokens"])
     return narrative_gen + extraction + embedding
 
@@ -230,23 +286,37 @@ def pilot_scenario():
 
 def main():
     conv_c, conv_d = conversation_cost()
-    ext_c, _ = extraction_cost()
+    ext_c, _ = extraction_cost()  # legacy fallback path only — priced for reference, excluded from journey_cost below
     disc_c, _ = discovery_cost()
     match_c, _ = matching_cost()
-    journey_cost = conv_c + ext_c + disc_c + match_c
+
+    # Canonicalization fires after conversation-complete (over the
+    # conversation's own observations) and again after Discovery-respond
+    # (over conversation evidence + the Discovery's new rows) — it re-sends
+    # the full active evidence set each time, so the second call is priced
+    # over the cumulative total, not just the 4 new rows.
+    evidence_after_conversation = ASSUMPTIONS["observations_per_conversation"]
+    evidence_after_discovery = evidence_after_conversation + ASSUMPTIONS["discovery_evidence_rows"]
+    canon_conv_c, canon_conv_d = canonicalization_cost(evidence_after_conversation)
+    canon_disc_c, canon_disc_d = canonicalization_cost(evidence_after_discovery)
+
+    journey_cost = conv_c + canon_conv_c + disc_c + canon_disc_c + match_c
 
     print("=== Real system prompt sizes (exact chars, approximate tokens) ===")
     print(f"  conversation SYSTEM_PROMPT:      {count_tokens(CONVO_SYSTEM_PROMPT):>4} tokens")
-    print(f"  extraction EXTRACTION_SYSTEM_PROMPT: {count_tokens(EXTRACTION_SYSTEM_PROMPT):>4} tokens")
+    print(f"  extraction LEGACY_TRANSCRIPT_PROMPT (legacy fallback): {count_tokens(LEGACY_TRANSCRIPT_PROMPT):>4} tokens")
     print(f"  discovery SYNTHESIS_SYSTEM_PROMPT: {count_tokens(SYNTHESIS_SYSTEM_PROMPT):>4} tokens")
     print(f"  matching MATCH_SYSTEM_PROMPT:    {count_tokens(MATCH_SYSTEM_PROMPT):>4} tokens")
+    print(f"  canonicalization CANONICALIZATION_SYSTEM_PROMPT: {count_tokens(CANONICALIZATION_SYSTEM_PROMPT):>4} tokens")
 
-    print(f"\n=== Per-user-journey cost (conversation + extraction + Discovery + one /matches call, {conv_d['turns']} turns) ===")
-    print(f"  conversation (gpt-4o):     ${conv_c:.5f}")
-    print(f"  extraction (gpt-4o-mini):  ${ext_c:.5f}")
-    print(f"  discovery (gpt-4o-mini):   ${disc_c:.5f}")
-    print(f"  matching (embed + mini):   ${match_c:.5f}")
-    print(f"  TOTAL per user journey:    ${journey_cost:.5f}")
+    print(f"\n=== Per-user-journey cost (conversation + Discovery + one /matches call, {conv_d['turns']} turns) ===")
+    print(f"  conversation, incl. per-turn observations (gpt-4o): ${conv_c:.5f}")
+    print(f"  canonicalize after conversation complete ({canon_conv_d['evidence_count']} evidence rows, gpt-4o-mini): ${canon_conv_c:.5f}")
+    print(f"  discovery insight synthesis (gpt-4o-mini):           ${disc_c:.5f}")
+    print(f"  canonicalize after Discovery respond ({canon_disc_d['evidence_count']} evidence rows, gpt-4o-mini):   ${canon_disc_c:.5f}")
+    print(f"  matching (embed + mini):                             ${match_c:.5f}")
+    print(f"  TOTAL per user journey:                              ${journey_cost:.5f}")
+    print(f"  (legacy extraction fallback path, NOT in the total above, for reference: ${ext_c:.5f})")
 
     per_candidate = candidate_ingestion_cost_per_candidate()
     print(f"\n=== One-time candidate pool seeding ===")

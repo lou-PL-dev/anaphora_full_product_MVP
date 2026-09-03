@@ -43,7 +43,7 @@ picture, team burn has to be the headline ongoing cost, not a footnote.
 | Team burn (5-8 people, blended pre-seed compensation) | **≈€30,000/month** | Founder-approved raise (€500K) implies a working runway assumption; €30K/month gives ≈16-17 months runway on the pre-seed alone — consistent with a typical pre-seed timeline to a seed round, not stretching an unrealistic 3 years off one raise (see §6's break-even note for why this matters) |
 | Hosting (paid tier — backend + Postgres + frontend) | **$33.00** | Measured in `cost_timeline_estimate.md` — Render Starter ($7) + Render Postgres Basic-256mb ($6) + Netlify Pro ($20), needed to avoid cold-starts and the free Postgres tier's 30-day expiry once beyond a private pilot |
 | Analytics (Plausible Starter) | **$9.00** | Measured in `cost_timeline_estimate.md` — EU-hosted, no-cookie-banner choice consistent with the product's own privacy positioning |
-| LLM cost per new user | **$0.0217/signup** | Measured, not estimated — `cost_timeline_estimate.md`'s per-user-journey figure (one conversation + extraction + one Discovery + one `/matches` call), computed from the actual system prompts shipped in `anaphora_backend` |
+| LLM cost per new user | **$0.01755/signup** | Measured, not estimated — `cost_timeline_estimate.md`'s per-user-journey figure (one conversation + Blueprint canonicalization + one Discovery + one `/matches` call), computed from the actual system prompts shipped in `anaphora_backend`. This prices each member's *first* journey only — it does not yet include the extra canonicalization cost a returning member's later Discoveries, friend contributions, or corrections add (each re-canonicalizes their full evidence history); see `cost_timeline_estimate.md`'s "Key finding" for why that's a real cost driver to re-measure once there's usage data, not a rounding error |
 | **Fixed monthly floor** | **≈€30,042** | Team burn is ~99.86% of this — infrastructure is not the ongoing-cost story at this scale |
 
 ---
@@ -97,10 +97,10 @@ cost over the period.
 |---|---|---|
 | Upfront cost | €500,000 | €500,000 |
 | Cumulative team burn | €30,000 × 12 = €360,000 | €30,000 × 36 = €1,080,000 |
-| Cumulative infra/LLM cost | ≈€515 | ≈€1,620 |
-| **Total cost** | **€860,515** | **€1,581,620** |
+| Cumulative infra/LLM cost | ≈€513 | ≈€1,600 |
+| **Total cost** | **€860,513** | **€1,581,600** |
 | Cumulative revenue | €3,801 | €87,413 |
-| **Net benefit** | **−€856,714** | **−€1,494,208** |
+| **Net benefit** | **−€856,712** | **−€1,494,187** |
 | **ROI** | **≈ −99.6%** | **≈ −94.5%** |
 
 **This is deeply negative at both horizons, and that's the honest,
@@ -133,7 +133,7 @@ asking, not the cumulative total in isolation.
 | Team burn | €30,000/month | Derived from the €500K raise assuming ≈16-17mo pre-seed runway, not independently approved — see §6 |
 | Growth curve shape | Linear between anchor points | Simplification — no real signup data exists yet to fit a curve to (same honesty principle as `cost_timeline_estimate.md`'s labeled guesses) |
 | USD→EUR | 1:1 | Rounding simplification — infra costs are immaterial next to team cost either way |
-| Per-user LLM cost | $0.0217/signup | **Measured**, not assumed — from the actual shipped prompts |
+| Per-user LLM cost | $0.01755/signup | **Measured**, not assumed — from the actual shipped prompts; first-journey cost only, see caveat in §2 |
 | Fixed monthly hosting+analytics | $42/month | **Measured** — see `cost_timeline_estimate.md` |
 
 ---

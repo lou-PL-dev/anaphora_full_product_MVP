@@ -17,8 +17,9 @@ The core AI capability actually runs end to end. The MVP is not a static prototy
 It currently supports:
 
 - guided conversational exploration of relationship preferences and self-description;
-- atomic structured extraction from conversation into two perspectives: `ME` and `IDEAL_PARTNER`;
-- a persisted Relationship Blueprint with categories including personality, lifestyle, physical type, relationship dynamic, love language, dealbreakers and values;
+- atomic structured extraction from conversation into three perspectives: `ME` (who the user is), `IDEAL_PARTNER` (who they want), and `US` (the relationship they want to create);
+- a persisted Relationship Blueprint with `ME` categories personality, lifestyle, relationship_behavior and core_values; `IDEAL_PARTNER` categories personality, lifestyle and physical_type; and `US` categories relationship_shape, connection_affection, shared_direction and boundaries;
+- source-preserving evidence: every raw observation (from conversation, a Discovery, a friend contribution, or a member's own correction) is kept, and the member-facing Blueprint is a canonical projection rebuilt from that full evidence history rather than edited signal-by-signal — see §4.2;
 - a deterministic readiness score based on Blueprint coverage;
 - multiple short Discoveries that add structured information and synthesized insights;
 - friend contribution through single-use links, while keeping the friend's raw individual answers private from the inviting user;
@@ -59,7 +60,8 @@ Important persisted objects include:
 
 - `User`
 - `Conversation`
-- `BlueprintSignal`
+- `BlueprintEvidence` — raw, append-only observations from every source (conversation, Discovery, friend contribution, member correction)
+- `BlueprintSignal` — the canonical, member-facing Blueprint projection rebuilt from `BlueprintEvidence` (see §4.2); never edited in place
 - `DiscoveryResponse`
 - `Candidate`
 - `FriendInvite`
@@ -86,21 +88,26 @@ Each user turn is stored as raw conversation text. The conversational layer also
 
 This separation is important: the transcript is evidence, while the structured observations become the working source of truth for later extraction and matching.
 
-### 4.2 Relationship Blueprint extraction
+### 4.2 Relationship Blueprint extraction and canonicalization
 
-When the user chooses to save the conversation, accumulated observations are reconciled into a canonical set of Blueprint signals.
+Every Blueprint-affecting action — completing a conversation, submitting a Discovery, accepting a friend's contribution, or correcting a signal — first writes one or more raw, append-only rows to `BlueprintEvidence` (`anaphora_backend/app/blueprint_canonicalizer.py`). Evidence is never edited or deleted in place; a correction is stored as new evidence that supersedes the specific prior evidence it replaces, so the original wording is retained even after the member-facing Blueprint no longer reflects it.
 
-Each signal contains fields such as:
+The member-facing Blueprint (`BlueprintSignal`) is not built incrementally from one action at a time. Instead, `rebuild_blueprint()` sends a member's **entire active evidence history** to an LLM in one call, which merges semantic duplicates across sources, splits compound observations into independent ideas, reclassifies anything filed under the wrong lens/category, and returns one clean, non-repetitive projection. The result is validated before anything is written: every evidence ID must be grounded in at least one output signal, no signal may cite an unknown ID, and no evidence ID may be silently dropped. Only after validation passes are the old `BlueprintSignal` rows deleted and replaced — a failed or malformed canonicalization response leaves the existing Blueprint untouched rather than corrupting or emptying it.
 
-- perspective: `ME` or `IDEAL_PARTNER`;
+Each canonical signal contains fields such as:
+
+- perspective: `ME`, `IDEAL_PARTNER`, or `US`;
 - category;
 - label;
-- strength;
-- source;
-- supporting evidence;
+- strength — resolved deterministically from the linked evidence's own strength, never invented by the canonicalization model; an inferred observation can never become a `hard_requirement`, only an explicit statement or member correction can;
+- source (`"canonical"`);
+- the IDs of every evidence row the signal is grounded in;
+- supporting evidence text;
 - confidence.
 
-A human-readable narrative is also generated, but the narrative itself is not used as the sole source of truth for matching.
+A human-readable narrative describing the `IDEAL_PARTNER` is also regenerated on every rebuild, but the narrative itself is not used as a source of truth for matching.
+
+This full-history rebuild means canonicalization cost scales with a member's total accumulated evidence, not just what changed in the current action — see `product_document/cost_timeline_estimate.md` for the measured cost shape.
 
 ### 4.3 Readiness
 

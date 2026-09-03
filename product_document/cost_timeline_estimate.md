@@ -6,7 +6,7 @@ Round 1 presented Monday morning. Round 2 demos Friday.
 
 | Day | Milestone | What happens |
 |---|---|---|
-| Mon AM | Round 1 recap | What's live right now: self-tracking conversational intake, the 7-category Relationship Blueprint with a narrative portrait, one working Discovery, and the sourced market dashboard — everything in this demo. |
+| Mon AM | Round 1 recap | What's live right now: self-tracking conversational intake, the ME / IDEAL_PARTNER / US Relationship Blueprint with a narrative portrait, one working Discovery, and the sourced market dashboard — everything in this demo. |
 | Mon PM | Round 2 kickoff | Clean datasets of profiles, and build the RAG matching logic. Start the friend-invite feature and link. |
 | Tue | Friends end-to-end + real matching | Friend signals land on the asker's Blueprint with `source=friend` provenance. `matching_chain` embeds profile narratives and writes the "why this match" rationale. Recruit testers for Wednesday. |
 | Wed | User testing, then react | Real people run the conversation and the friend-invite flow end to end. Log every drop-off and confusing moment; fix the top issues the same day. |
@@ -24,8 +24,9 @@ strictly separate so the estimate is auditable:
 
 1. **Measured**: character counts of the actual system prompts shipped in
    `anaphora_backend` — imported directly from the real chain modules
-   (`conversation_chain.SYSTEM_PROMPT`, `extraction_chain.EXTRACTION_SYSTEM_PROMPT`,
-   `discovery_chain.SYNTHESIS_SYSTEM_PROMPT`, `matching_chain.MATCH_SYSTEM_PROMPT`),
+   (`conversation_chain.SYSTEM_PROMPT`, `extraction_chain.LEGACY_TRANSCRIPT_PROMPT`,
+   `discovery_chain.SYNTHESIS_SYSTEM_PROMPT`, `matching_chain.MATCH_SYSTEM_PROMPT`,
+   `blueprint_canonicalizer.CANONICALIZATION_SYSTEM_PROMPT`),
    not paraphrased or guessed at. Converted to an approximate token count
    (~4 chars/token, OpenAI's own published rule of thumb) — exact BPE
    tokenization via `tiktoken` needs a vocab file from a host this sandboxed
@@ -34,10 +35,33 @@ strictly separate so the estimate is auditable:
    (already wired in — see `anaphora_backend/README.md`) report **exact**
    real token usage per call and should replace this approximation.
 2. **Assumed**: everything that varies per real user (message length,
-   conversation length) — no production traffic exists yet to measure this
-   from, so these are explicit, labeled guesses in `ASSUMPTIONS` at the top
-   of the script, not hidden inside the math. Change them and rerun to see
-   how sensitive the estimate is.
+   conversation length, evidence rows per conversation/Discovery) — no
+   production traffic exists yet to measure this from, so these are
+   explicit, labeled guesses in `ASSUMPTIONS` at the top of the script, not
+   hidden inside the math. Change them and rerun to see how sensitive the
+   estimate is.
+
+**Updated 2026-09-03** for the source-preserving-evidence architecture
+(`blueprint_canonicalizer.py`, see `mvp_documentation.md` §4). Two things
+changed in the same commit that shipped that architecture, with offsetting
+cost effects:
+- **Removed**: a per-turn observation already carries its own structured
+  extraction (`conversation_chain.converse()`'s single call now returns
+  both the reply and `ConversationObservation` rows), so the separate
+  extraction LLM call this estimate used to price no longer runs for a
+  modern conversation. It's kept in the script as `extraction_cost()`,
+  clearly marked legacy-fallback-only, and excluded from the journey total.
+- **Added**: `blueprint_canonicalizer.rebuild_blueprint()` re-sends a
+  member's entire active evidence history to `gpt-4o-mini` in one call
+  every time the Blueprint is mutated (conversation complete, Discovery
+  submit, friend-signal commit, signal correction) — modeled by
+  `canonicalization_cost(evidence_count)`. Net effect on the baseline
+  per-user-journey below: **cheaper**, not more expensive — the removed
+  extraction call was larger than the two canonicalization calls it
+  replaced. This will not stay true forever: canonicalization cost scales
+  with a member's *total accumulated evidence*, so a long-tenured member
+  with many conversations/Discoveries/corrections behind them pays
+  noticeably more per mutation than this first-journey baseline shows.
 
 Pricing sourced via web search against aggregator pricing pages
 (cloudzero.com, lmmarketcap.com, openrouter.ai) on 2026-08-31 — OpenAI's own
@@ -47,25 +71,39 @@ before treating this as final.**
 
 Reproduce: `cd product_document/cost_estimate && python cost_model.py`
 
-### Per-user-journey cost (one conversation + extraction + one Discovery + one `/matches` call, 6 turns assumed)
+### Per-user-journey cost (one conversation + one Discovery + one `/matches` call, 6 turns assumed)
 
 | Call | Model | Cost |
 |---|---|---|
-| Conversation | `gpt-4o` | $0.02098 |
-| Extraction | `gpt-4o-mini` | $0.00051 |
-| Discovery insight | `gpt-4o-mini` | $0.00004 |
-| Matching (embed + explain) | `text-embedding-3-small` + `gpt-4o-mini` | $0.00017 |
-| **Total** | | **$0.0217** |
+| Conversation (incl. per-turn observations) | `gpt-4o` | $0.01621 |
+| Canonicalize after conversation complete (10 evidence rows) | `gpt-4o-mini` | $0.00048 |
+| Discovery insight synthesis | `gpt-4o-mini` | $0.00004 |
+| Canonicalize after Discovery respond (14 evidence rows) | `gpt-4o-mini` | $0.00062 |
+| Matching (embed + explain) | `text-embedding-3-small` + `gpt-4o-mini` | $0.00021 |
+| **Total** | | **$0.01755** |
 
-**Key finding**: the conversation dominates cost (~97% of the journey) for
-two compounding reasons — it's the one call site on the pricier `gpt-4o`
-(needed to actually track category coverage across a transcript reliably,
-see the earlier prompt-quality fix), and `conversation_chain._to_langchain_messages`
-resends the **entire message history every turn**, so input tokens grow
-roughly with the square of turn count, not linearly. A 12-turn conversation
-(the hard ceiling) costs meaningfully more than double a 6-turn one — worth
-knowing if usage grows and this needs optimizing (e.g. summarizing older
-turns instead of resending them verbatim).
+For reference, not counted in the total above: the legacy transcript-scan
+extraction path a pre-canonicalization conversation would fall back to
+costs $0.00047 — it no longer runs for a modern conversation, since
+observation extraction is now folded into each conversation turn's own
+structured output.
+
+**Key finding**: the conversation still dominates cost (~92% of the
+journey) for two compounding reasons — it's the one call site on the
+pricier `gpt-4o` (needed to actually track category coverage across a
+transcript reliably, see the earlier prompt-quality fix), and
+`conversation_chain._to_langchain_messages` resends the **entire message
+history every turn**, so input tokens grow roughly with the square of turn
+count, not linearly. A 16-turn conversation (the current hard ceiling)
+costs meaningfully more than the 6-turn baseline — worth knowing if usage
+grows and this needs optimizing (e.g. summarizing older turns instead of
+resending them verbatim). Canonicalization has the same resend-everything
+shape on a smaller, cheaper model: it re-sends a member's full active
+evidence history on every Blueprint mutation, so a long-tenured member
+(many conversations, Discoveries, friend contributions, corrections) pays
+more per mutation than this first-journey baseline — worth re-measuring
+against real per-member evidence counts once there's production data,
+the same "measure, don't keep guessing" principle as everything else here.
 
 ### One-time cost: seeding the candidate pool
 
@@ -92,9 +130,9 @@ netlify.com/pricing before final submission.
 
 | New users/month | LLM only | + free-tier hosting | + paid-tier hosting |
 |---|---|---|---|
-| 100 | $2.17 | $2.17 | $35.17 |
-| 1,000 | $21.70 | $21.70 | $54.70 |
-| 10,000 | $216.96 | $216.96 | $249.96 |
+| 100 | $1.76 | $1.76 | $34.76 |
+| 1,000 | $17.55 | $17.55 | $50.55 |
+| 10,000 | $175.54 | $175.54 | $208.54 |
 
 At current (near-zero) usage, hosting is the dominant cost, not LLM calls
 — that inverts somewhere between 1,000 and 10,000 new users/month, per
@@ -146,10 +184,14 @@ would be:
 | Hosting (paid tier) | $33.00 |
 | Plausible Analytics | $9.00 |
 | **Fixed monthly floor** | **$42.00** |
-| + per-user-journey LLM cost on top | + $0.0217 × new users that month |
+| + per-user-journey LLM cost on top | + $0.01755 × new users that month |
 
-E.g. a 300-signup first pilot month: $42 fixed + (300 × $0.0217) ≈ **$48.51
-total** — hosting and analytics dominate at this scale, not LLM calls.
+E.g. a 300-signup first pilot month: $42 fixed + (300 × $0.01755) ≈ **$47.27
+total** — hosting and analytics dominate at this scale, not LLM calls. This
+uses each new user's first-journey cost only; it does not yet account for
+canonicalization cost on returning members' later Discoveries, friend
+contributions or corrections (see "Key finding" above) — a real driver to
+watch once there's usage data, not a rounding error at pilot scale.
 
 ### Assumptions log (everything not measured from real code)
 
@@ -158,8 +200,10 @@ total** — hosting and analytics dominate at this scale, not LLM calls.
 | Avg. user turns/conversation | 6 | Midpoint of the 3–12 turn range enforced in `conversation_chain.py`; no production data yet |
 | Avg. user message length | 40 tokens (~30 words) | Rough estimate from testing transcripts |
 | Avg. AI reply length | 45 tokens | Matches the "one or two sentences" prompt rule |
-| Extraction output size | 600 tokens | Two full Blueprints + narrative, structured |
+| Extraction output size | 600 tokens | Two full Blueprints + narrative, structured — legacy fallback path only |
 | Matches returned per request | 5 | Default `k` in `matching_router.get_matches` |
+| Evidence rows after one conversation | 10 | Atomic `ConversationObservation` rows across a 6-turn conversation, ~1.5–2/turn since one statement can support multiple fields — no production data yet |
+| Evidence rows added by one Discovery | 4 | One evidence row per question, typical of the 4-question Discoveries in `discovery_registry.py` |
 
 ### Caveats
 
