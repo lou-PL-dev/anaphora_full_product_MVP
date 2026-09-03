@@ -18,6 +18,7 @@ from ..auth import get_current_user
 from ..config import settings
 from ..database import get_db
 from ..models import (
+    BlueprintEvidence,
     BlueprintSignal,
     Conversation,
     DiscoveryResponse,
@@ -118,6 +119,7 @@ def clear_test_sessions(
         db.query(FriendInvite).delete(synchronize_session=False)
         db.query(TesterEvent).delete(synchronize_session=False)
         db.query(DiscoveryResponse).delete(synchronize_session=False)
+        db.query(BlueprintEvidence).delete(synchronize_session=False)
         db.query(BlueprintSignal).delete(synchronize_session=False)
         db.query(Conversation).delete(synchronize_session=False)
         deleted_users = db.query(User).delete(synchronize_session=False)

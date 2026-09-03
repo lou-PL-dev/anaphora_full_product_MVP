@@ -99,6 +99,24 @@ class ExtractionResult(BaseModel):
     narrative: str = Field(description="A flowing portrait exclusively of the ideal partner, addressed directly to the member; never a summary of the member or the relationship taxonomy")
 
 
+class CanonicalSignalDraft(BaseModel):
+    """One deduplicated Blueprint idea linked to all supporting evidence."""
+    perspective: str = Field(description="ME, IDEAL_PARTNER, or US")
+    category: BaseCategory
+    label: str = Field(description="One concise member-facing idea; never refer to 'the user'")
+    evidence_ids: list[str] = Field(
+        min_length=1,
+        description="IDs of every raw observation merged into this idea; put the clearest primary evidence first",
+    )
+
+
+class CanonicalBlueprintResult(BaseModel):
+    signals: list[CanonicalSignalDraft]
+    narrative: str = Field(
+        description="One replacement portrait exclusively of the ideal partner, addressed directly to the member",
+    )
+
+
 class ConversationStartResponse(BaseModel):
     conversation_id: str
     message: str

@@ -10,9 +10,10 @@ from ..schemas import (
     PerspectiveBlueprint, IdealPartnerBlueprint, RelationshipBlueprint,
 )
 from ..chains.conversation_chain import converse, user_turn_count, is_ready_to_complete
-from ..chains.extraction_chain import extract_blueprint
+from ..chains.extraction_chain import extract_blueprint, observations_from_history
 from ..chains.input_segmentation import is_long_input
 from ..chains.long_input_chain import digest_long_input, format_processing_summary
+from ..blueprint_canonicalizer import add_evidence, ensure_evidence_backfill, rebuild_blueprint
 from ..readiness import compute_readiness, category_coverage
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
@@ -98,29 +99,16 @@ def complete_conversation(
     if convo.status == "completed":
         raise HTTPException(400, "Conversation already completed — signals were already extracted")
 
-    # Reconciliation is now driven by the accumulated structured observations,
-    # not by an LLM re-reading and re-summarising the entire raw transcript.
-    result = extract_blueprint(convo.messages)
-    created: list[BlueprintSignal] = []
-
     source_key = f"conversation:{convo.id}"
 
     def _store(perspective: str, category: str, items) -> None:
         if not items:
             return
-        existing = {
-            (signal.label or "").strip().casefold()
-            for signal in db.query(BlueprintSignal).filter(
-                BlueprintSignal.user_id == user.id,
-                BlueprintSignal.perspective == perspective,
-                BlueprintSignal.category == category,
-            ).all()
-        }
         for item in items:
-            key = item.label.strip().casefold()
-            if not key or key in existing:
+            if not item.label.strip():
                 continue
-            signal = BlueprintSignal(
+            add_evidence(
+                db,
                 user_id=user.id,
                 perspective=perspective,
                 category=category,
@@ -129,37 +117,55 @@ def complete_conversation(
                 source=source_key,
                 evidence_text=item.evidence_text,
                 confidence=item.confidence,
+                explicit=item.explicit,
             )
-            db.add(signal)
-            created.append(signal)
-            existing.add(key)
 
-    for category in IdealPartnerBlueprint.model_fields:
-        _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
-    for category in PerspectiveBlueprint.model_fields:
-        _store("ME", category, getattr(result.me, category))
-    for category in RelationshipBlueprint.model_fields:
-        _store("US", category, getattr(result.us, category))
+    try:
+        # Preserve every pre-existing signal before adding this conversation's
+        # observations, then rebuild one projection from the whole history.
+        ensure_evidence_backfill(db, user.id)
+        observations = observations_from_history(convo.messages)
+        if observations:
+            # Modern conversations already captured atomic, grounded
+            # observations turn by turn. Store those directly and use the one
+            # global canonicalization pass below; this avoids a redundant LLM
+            # reconciliation call at completion.
+            for obs in observations:
+                add_evidence(
+                    db,
+                    user_id=user.id,
+                    perspective=obs.perspective,
+                    category=obs.category.value,
+                    label=obs.label,
+                    strength=obs.strength.value,
+                    source=source_key,
+                    evidence_text=obs.evidence_text,
+                    confidence=obs.confidence,
+                    explicit=obs.explicit,
+                )
+        else:
+            # Compatibility for conversations created before per-turn
+            # observations were persisted.
+            result = extract_blueprint(convo.messages)
+            for category in IdealPartnerBlueprint.model_fields:
+                _store("IDEAL_PARTNER", category, getattr(result.ideal_partner, category))
+            for category in PerspectiveBlueprint.model_fields:
+                _store("ME", category, getattr(result.me, category))
+            for category in RelationshipBlueprint.model_fields:
+                _store("US", category, getattr(result.us, category))
 
-    # Narrative is a human-readable projection of this reconciled state. A
-    # follow-up conversation adds another projection without deleting earlier
-    # structured categories that were not revisited.
-    user.blueprint_narrative = (
-        f"{user.blueprint_narrative}\n\n{result.narrative}"
-        if user.blueprint_narrative else result.narrative
-    )
-    db.add(user)
-
-    convo.status = "completed"
-    db.add(convo)
-    db.commit()
-    for s in created:
-        db.refresh(s)
+        canonical_signals = rebuild_blueprint(db, user)
+        convo.status = "completed"
+        db.add(convo)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     readiness_pct, _ = compute_readiness(db, user.id)
 
     return ConversationCompleteResponse(
-        signals=[BlueprintSignalOut.model_validate(s) for s in created],
-        narrative=result.narrative,
+        signals=[BlueprintSignalOut.model_validate(s) for s in canonical_signals],
+        narrative=user.blueprint_narrative or "",
         readiness_pct=readiness_pct,
     )

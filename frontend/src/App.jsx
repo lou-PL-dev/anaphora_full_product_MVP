@@ -173,7 +173,11 @@ export default function App() {
   const saveEdit = async () => {
     const { editing, editLabel, editStrength } = s;
     patch((prev) => ({ editing: null, signals: prev.signals.map((x) => (x.id === editing.id ? { ...x, label: editLabel, strength: editStrength } : x)) }));
-    await api('PATCH', '/blueprint/signal/' + editing.id, { label: editLabel, strength: editStrength });
+    const saved = await api('PATCH', '/blueprint/signal/' + editing.id, { label: editLabel, strength: editStrength });
+    if (saved) {
+      const full = await api('GET', '/blueprint');
+      if (full) patch({ signals: full.signals || [], narrative: full.narrative || '' });
+    }
   };
 
   const startDiscovery = async (discoveryId = DEFAULT_DISCOVERY_ID, returnScreen = 'home') => {
@@ -209,7 +213,8 @@ export default function App() {
     patch({ discoverySaving: true, discoverySaveError: false, error: null });
     const r = await api('POST', '/discovery/' + discoveryId + '/respond', payload, TIMEOUT_INSIGHT);
     if (r) {
-      patch((prev) => ({ insight: r.insight_text, newSignals: r.new_signals, signals: prev.signals.concat(r.new_signals), readiness: r.readiness_pct, discoveryDone: true, completedDiscoveries: prev.completedDiscoveries.includes(discoveryId) ? prev.completedDiscoveries : prev.completedDiscoveries.concat(discoveryId), discoverySaving: false, discoverySaveError: false }));
+      const full = await api('GET', '/blueprint');
+      patch((prev) => ({ insight: r.insight_text, newSignals: r.new_signals, signals: full ? full.signals || [] : prev.signals, narrative: full ? full.narrative || '' : prev.narrative, readiness: r.readiness_pct, discoveryDone: true, completedDiscoveries: prev.completedDiscoveries.includes(discoveryId) ? prev.completedDiscoveries : prev.completedDiscoveries.concat(discoveryId), discoverySaving: false, discoverySaveError: false }));
     } else patch({ discoverySaving: false, discoverySaveError: true });
   };
 
@@ -251,7 +256,10 @@ export default function App() {
     if (s.friendCommitting || !s.friendReviewInviteId) return;
     patch({ friendCommitting: true, error: null });
     const r = await api('POST', '/friends/' + s.friendReviewInviteId + '/commit', { accepted_signal_ids: s.friendReviewSelected });
-    if (r) patch((prev) => ({ friendCommitting: false, friendCommitted: true, friendAddedCount: r.added_signals.length, signals: prev.signals.concat(r.added_signals), readiness: r.readiness_pct, friends: prev.friends.map((f) => (f.id === prev.friendReviewInviteId ? { ...f, reviewed: true } : f)) }));
+    if (r) {
+      const full = await api('GET', '/blueprint');
+      patch((prev) => ({ friendCommitting: false, friendCommitted: true, friendAddedCount: r.added_signals.length, signals: full ? full.signals || [] : prev.signals, narrative: full ? full.narrative || '' : prev.narrative, readiness: r.readiness_pct, friends: prev.friends.map((f) => (f.id === prev.friendReviewInviteId ? { ...f, reviewed: true } : f)) }));
+    }
     else patch({ friendCommitting: false, error: { screen: 'friendReview', message: "Couldn't save your choices. Please try again." } });
   };
 

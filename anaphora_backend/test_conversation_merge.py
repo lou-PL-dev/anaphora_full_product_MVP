@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.schemas import (ExtractionResult, PerspectiveBlueprint, IdealPartnerBlueprint,
                          RelationshipBlueprint, SignalItem, Strength)
+from canonical_test_support import canonicalize_without_llm
 
 FIRST_EXTRACTION = ExtractionResult(
     ideal_partner=IdealPartnerBlueprint(
@@ -30,7 +31,8 @@ SECOND_EXTRACTION = ExtractionResult(
     narrative="Values close family ties.",
 )
 
-with patch("app.routers.conversation_router.extract_blueprint", side_effect=[FIRST_EXTRACTION, SECOND_EXTRACTION]):
+with patch("app.routers.conversation_router.extract_blueprint", side_effect=[FIRST_EXTRACTION, SECOND_EXTRACTION]), \
+     patch("app.blueprint_canonicalizer.canonicalize_evidence", side_effect=canonicalize_without_llm):
     from app.main import app
     client = TestClient(app)
     headers = {"X-Anaphora-User-Id": "merge-test-user"}
@@ -58,7 +60,7 @@ with patch("app.routers.conversation_router.extract_blueprint", side_effect=[FIR
     }, f"expected the 1st conversation's categories to survive alongside the 2nd's, got {categories}"
 
     narrative = client.get("/blueprint", headers=headers).json()["narrative"]
-    assert "Warm and drawn to quiet nights in." in narrative and "Values close family ties." in narrative, narrative
-    print("narrative accumulated:", narrative)
+    assert narrative.count("You are drawn to someone") == 1, narrative
+    print("narrative rebuilt:", narrative)
 
-print("\nMERGE BEHAVIOR VERIFIED — a follow-up conversation adds to the Blueprint instead of replacing it")
+print("\nMERGE BEHAVIOR VERIFIED — source evidence accumulates while one canonical Blueprint is rebuilt")

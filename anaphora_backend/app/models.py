@@ -38,6 +38,7 @@ class User(Base):
 
     conversations = relationship("Conversation", back_populates="user")
     signals = relationship("BlueprintSignal", back_populates="user")
+    blueprint_evidence = relationship("BlueprintEvidence", back_populates="user")
     discovery_responses = relationship("DiscoveryResponse", back_populates="user")
     events = relationship("TesterEvent", back_populates="user")
 
@@ -68,9 +69,38 @@ class BlueprintSignal(Base):
     source = Column(String)
     evidence_text = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
+    # IDs of the immutable evidence rows represented by this canonical signal.
+    # Kept on the projection so a member correction can supersede the right
+    # source observations without throwing away the original wording.
+    evidence_ids = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="signals")
+
+
+class BlueprintEvidence(Base):
+    """Raw observations used to rebuild the member-facing Blueprint.
+
+    BlueprintSignal is the clean, canonical projection.  Evidence remains
+    source-preserving so later conversations can merge or reclassify meaning
+    without erasing what the member (or a friend) actually said.
+    """
+    __tablename__ = "blueprint_evidence"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"), index=True)
+    perspective = Column(String)
+    category = Column(String)
+    label = Column(String)
+    strength = Column(String, default="preference")
+    source = Column(String)
+    evidence_text = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
+    explicit = Column(Boolean, default=True)
+    supersedes_evidence_ids = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="blueprint_evidence")
 
 
 class Candidate(Base):

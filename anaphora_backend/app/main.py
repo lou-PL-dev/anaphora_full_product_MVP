@@ -25,10 +25,16 @@ def sync_schema() -> None:
     with engine.begin() as conn:
         if engine.dialect.name == "postgresql":
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
+            conn.execute(text("ALTER TABLE blueprint_signals ADD COLUMN IF NOT EXISTS evidence_ids JSON"))
         else:
             columns = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
             if "birth_date" not in columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN birth_date DATE"))
+            signal_columns = {
+                row[1] for row in conn.execute(text("PRAGMA table_info(blueprint_signals)"))
+            }
+            if "evidence_ids" not in signal_columns:
+                conn.execute(text("ALTER TABLE blueprint_signals ADD COLUMN evidence_ids JSON"))
 
 
 sync_schema()
@@ -46,6 +52,7 @@ def sync_indexes() -> None:
     statements = [
         "CREATE INDEX IF NOT EXISTS ix_conversations_user_id ON conversations (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_blueprint_signals_user_id ON blueprint_signals (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_blueprint_evidence_user_id ON blueprint_evidence (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_discovery_responses_user_id ON discovery_responses (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_discovery_responses_discovery_id ON discovery_responses (discovery_id)",
         "CREATE INDEX IF NOT EXISTS ix_friend_invites_user_id ON friend_invites (user_id)",

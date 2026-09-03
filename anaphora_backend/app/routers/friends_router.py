@@ -5,7 +5,13 @@ from ..database import get_db
 from ..auth import get_current_user
 from ..friend_library import FRIEND_QUESTIONS, FRIEND_QUESTION_IDS, question_prompt
 from ..chains.friend_chain import extract_friend_signals
-from ..models import BlueprintSignal, FriendInvite, FriendResponse, FriendSignal, User
+from ..models import FriendInvite, FriendResponse, FriendSignal, User
+from ..blueprint_canonicalizer import (
+    add_evidence,
+    ensure_evidence_backfill,
+    rebuild_blueprint,
+    signals_supported_by,
+)
 from ..readiness import compute_readiness
 from ..schemas import (
     BlueprintSignalOut,
@@ -104,30 +110,33 @@ def commit_friend_signals(
     signals = db.query(FriendSignal).filter(FriendSignal.response_id == response.id).all()
     accepted_ids = set(body.accepted_signal_ids)
 
-    created: list[BlueprintSignal] = []
     try:
+        ensure_evidence_backfill(db, user.id)
+        created_evidence_ids: set[str] = set()
         for signal in signals:
             if signal.id in accepted_ids:
                 signal.status = "accepted"
-                blueprint_signal = BlueprintSignal(
+                evidence = add_evidence(
+                    db,
                     user_id=user.id,
                     perspective=signal.perspective,
                     category=signal.category,
                     label=signal.label,
                     strength=signal.strength,
-                    source="friend",
+                    source=f"friend:{response.id}",
                     evidence_text=signal.evidence_text,
+                    confidence=1.0,
+                    explicit=True,
                 )
-                db.add(blueprint_signal)
-                created.append(blueprint_signal)
+                created_evidence_ids.add(evidence.id)
             else:
                 signal.status = "dismissed"
             db.add(signal)
         response.reviewed = True
         db.add(response)
+        canonical_signals = rebuild_blueprint(db, user)
+        created = signals_supported_by(canonical_signals, created_evidence_ids)
         db.commit()
-        for blueprint_signal in created:
-            db.refresh(blueprint_signal)
     except Exception:
         db.rollback()
         raise

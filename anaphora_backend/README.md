@@ -16,6 +16,7 @@ anaphora_backend/
 │   ├── schemas.py              # Pydantic request/response + LLM extraction schema
 │   ├── auth.py                  # anonymous session dependency (no real auth, PRD section 5)
 │   ├── readiness.py              # deterministic readiness % (PRD section 17)
+│   ├── blueprint_canonicalizer.py # raw evidence → deduplicated Blueprint projection
 │   ├── chains/
 │   │   ├── conversation_chain.py     # Operation A — the ideal-partner conversation
 │   │   ├── extraction_chain.py        # Operation B — structured extraction
@@ -28,6 +29,7 @@ anaphora_backend/
 │       ├── discovery_router.py          # /discovery/{id}, /discovery/{id}/respond
 │       └── matching_router.py            # /matches
 ├── test_flow.py                        # end-to-end test of the full PRD demo scenario
+├── canonicalize_blueprints.py          # one-time cleanup for existing profiles
 ├── test_duplicate_fix.py               # regression test for the re-completion duplicate-signals bug
 ├── test_matching.py                    # matching chain + router tests (mocked LLM, no real Postgres needed)
 ├── requirements.txt
@@ -52,6 +54,25 @@ first run) — no database setup needed to try it. For real use, set
 `DATABASE_URL` in `.env` to a real Postgres connection string (the
 deployed instance uses Render Postgres); every model in `app/models.py`
 is plain SQLAlchemy and works unchanged either way.
+
+## Cleaning existing Blueprints after this upgrade
+
+New conversations, Discoveries, accepted friend contributions, and member
+corrections now preserve their raw evidence and rebuild one canonical
+Blueprint. This semantically merges paraphrases, splits compound ideas,
+reclassifies misplaced ideas, and replaces rather than appends the
+ideal-partner portrait.
+
+After deploying the schema update, run this once from `anaphora_backend/`
+with `DATABASE_URL` and `OPENAI_API_KEY` pointing at the intended database:
+
+```bash
+python canonicalize_blueprints.py --all
+```
+
+To clean only one profile, use `--user-id <uuid>`. Each profile is committed
+independently; a failed model response leaves that profile's current Blueprint
+unchanged and the command reports the failure.
 
 Note: `Base.metadata.create_all()` only creates tables that don't already
 exist — it never alters an existing table. If you pull a change that adds

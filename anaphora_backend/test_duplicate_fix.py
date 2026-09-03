@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.schemas import (ConversationTurnResult, CoverageField, ExtractionResult, PerspectiveBlueprint,
                          IdealPartnerBlueprint, RelationshipBlueprint, SignalItem, Strength)
+from canonical_test_support import canonicalize_without_llm
 
 FAKE_EXTRACTION = ExtractionResult(
     ideal_partner=IdealPartnerBlueprint(
@@ -25,7 +26,8 @@ FAKE_TURN = ConversationTurnResult(
 )
 
 with patch("app.routers.conversation_router.converse", return_value=FAKE_TURN), \
-     patch("app.routers.conversation_router.extract_blueprint", return_value=FAKE_EXTRACTION):
+     patch("app.routers.conversation_router.extract_blueprint", return_value=FAKE_EXTRACTION), \
+     patch("app.blueprint_canonicalizer.canonicalize_evidence", side_effect=canonicalize_without_llm):
 
     from app.main import app
     client = TestClient(app)

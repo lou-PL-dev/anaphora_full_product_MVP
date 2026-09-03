@@ -3,9 +3,15 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import get_current_user
-from ..models import User, DiscoveryResponse, BlueprintSignal
+from ..models import User, DiscoveryResponse, BlueprintEvidence
 from ..schemas import DiscoveryResponseIn, DiscoveryResultResponse, BlueprintSignalOut
 from ..discovery_registry import DISCOVERIES, get_discovery_spec
+from ..blueprint_canonicalizer import (
+    add_evidence,
+    ensure_evidence_backfill,
+    rebuild_blueprint,
+    signals_supported_by,
+)
 from ..readiness import compute_readiness
 
 router = APIRouter(prefix="/discovery", tags=["discovery"])
@@ -68,26 +74,26 @@ def respond_to_discovery(
     new_signal_items = spec.responses_to_signals(responses_map)
     source_key = f"discovery:{discovery_id}"
 
-    created = []
     try:
+        ensure_evidence_backfill(db, user.id)
         db.query(DiscoveryResponse).filter(
             DiscoveryResponse.user_id == user.id,
             DiscoveryResponse.discovery_id == discovery_id,
         ).delete(synchronize_session=False)
 
-        # Provenance matters once multiple Discoveries can contribute to the
-        # same Blueprint category. Delete only this Discovery's old signals.
-        db.query(BlueprintSignal).filter(
-            BlueprintSignal.user_id == user.id,
-            BlueprintSignal.source == source_key,
+        # Rerunning a Discovery replaces only that source's raw observations.
+        # The full canonical projection is rebuilt below.
+        db.query(BlueprintEvidence).filter(
+            BlueprintEvidence.user_id == user.id,
+            BlueprintEvidence.source == source_key,
         ).delete(synchronize_session=False)
         # Backward-compatible cleanup for the original MVP Discovery, whose
         # old signals used the generic source="discovery".
         if discovery_id == "life_you_are_building":
-            db.query(BlueprintSignal).filter(
-                BlueprintSignal.user_id == user.id,
-                BlueprintSignal.source == "discovery",
-                BlueprintSignal.category == spec.category,
+            db.query(BlueprintEvidence).filter(
+                BlueprintEvidence.user_id == user.id,
+                BlueprintEvidence.source == "discovery",
+                BlueprintEvidence.category == spec.category,
             ).delete(synchronize_session=False)
 
         for item in body:
@@ -98,16 +104,13 @@ def respond_to_discovery(
                 response=item.response,
             ))
 
-        existing_keys = {
-            (signal.perspective, signal.category, (signal.label or "").strip().casefold())
-            for signal in db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user.id).all()
-        }
+        created_evidence_ids: set[str] = set()
         for mapped in new_signal_items:
             item = mapped.item
-            key = (mapped.perspective, mapped.category, item.label.strip().casefold())
-            if key in existing_keys:
+            if not item.label.strip():
                 continue
-            signal = BlueprintSignal(
+            evidence = add_evidence(
+                db,
                 user_id=user.id,
                 perspective=mapped.perspective,
                 category=mapped.category,
@@ -115,14 +118,14 @@ def respond_to_discovery(
                 strength=item.strength.value,
                 source=source_key,
                 evidence_text=item.evidence_text,
+                confidence=item.confidence,
+                explicit=item.explicit,
             )
-            db.add(signal)
-            created.append(signal)
-            existing_keys.add(key)
+            created_evidence_ids.add(evidence.id)
 
+        canonical_signals = rebuild_blueprint(db, user)
+        created = signals_supported_by(canonical_signals, created_evidence_ids)
         db.commit()
-        for signal in created:
-            db.refresh(signal)
     except Exception:
         db.rollback()
         raise
