@@ -110,17 +110,33 @@ export default function AdminTestSessions() {
             {!sessions.length && !loading && <div style={{ opacity: .65 }}>No tester sessions yet.</div>}
           </div>
         ) : (
-          <SessionDetail data={selected} onBack={() => setSelected(null)} />
+          <SessionDetail data={selected} onBack={() => setSelected(null)} secret={secret} />
         )}
       </div>
     </div>
   );
 }
 
-function SessionDetail({ data, onBack }) {
+function SessionDetail({ data, onBack, secret }) {
   const [tab, setTab] = useState('journey');
-  const tabs = [['journey', 'Journey'], ['conversation', 'Conversation'], ['blueprint', 'Blueprint'], ['discoveries', 'Discoveries'], ['intros', 'Intros']];
+  const [matches, setMatches] = useState(null);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState('');
+  const tabs = [['journey', 'Journey'], ['conversation', 'Conversation'], ['blueprint', 'Blueprint'], ['discoveries', 'Discoveries'], ['intros', 'Intros'], ['matches', 'Matches']];
   const introEvents = (data.events || []).filter((e) => e.event === 'intros_opened' || e.event === 'match_returned');
+
+  const loadMatches = async () => {
+    setMatchesLoading(true); setMatchesError('');
+    const r = await adminApiCall(secret, '/admin/test-sessions/' + encodeURIComponent(data.user_id) + '/matches-debug');
+    setMatchesLoading(false);
+    if (!r.ok) { setMatchesError('Could not load match diagnostics for this tester.'); return; }
+    setMatches(r.data);
+  };
+
+  useEffect(() => {
+    if (tab === 'matches' && !matches && !matchesLoading) loadMatches();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [tab]);
 
   return (
     <div>
@@ -143,6 +159,55 @@ function SessionDetail({ data, onBack }) {
       {tab === 'discoveries' && <Card>{(data.discoveries || []).length ? data.discoveries.map((d, i) => <div key={i} style={{ padding: '10px 0', borderTop: i ? `1px solid ${SKY}` : 'none' }}><div style={{ fontSize: 10.5, color: LAV }}>{d.discovery_id} · {d.question_id}</div><div style={{ fontSize: 13, marginTop: 4 }}>{d.response}</div></div>) : <div style={{ opacity: .65 }}>No Discovery answers yet.</div>}</Card>}
 
       {tab === 'intros' && <Card>{introEvents.length ? introEvents.map((e, i) => <div key={i} style={{ padding: '10px 0', borderTop: i ? `1px solid ${SKY}` : 'none' }}><div style={{ fontWeight: 600 }}>{e.event === 'match_returned' ? 'Match returned' : 'Intros opened'}</div><div style={{ fontSize: 12, marginTop: 4, opacity: .75 }}>{fmt(e.created_at)} · {JSON.stringify(e.metadata || {})}</div></div>) : <div style={{ opacity: .65 }}>No Intros activity yet.</div>}</Card>}
+
+      {tab === 'matches' && (
+        <Card>
+          <div style={{ fontSize: 12.5, opacity: .75, marginBottom: 16, lineHeight: 1.5 }}>
+            Why this tester did or didn't get a match — runs the same steps as the real Matches screen, but shows the count and score at every step instead of only the final result.
+          </div>
+          {matchesLoading && <div style={{ opacity: .65 }}>Checking…</div>}
+          {!matchesLoading && matchesError && <div style={{ color: '#8B3A3A', fontSize: 13 }}>{matchesError}</div>}
+          {!matchesLoading && !matchesError && matches && matches.error && (
+            <div style={{ fontSize: 13 }}>{matches.error}{typeof matches.readiness === 'number' && <div style={{ marginTop: 6, opacity: .7 }}>Readiness: {matches.readiness}%</div>}</div>
+          )}
+          {!matchesLoading && !matchesError && matches && !matches.error && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12 }}>
+                <div><b>{matches.candidate_pool_total}</b><div style={{ fontSize: 10.5, opacity: .65 }}>total candidates in the pool</div></div>
+                <div><b>{matches.after_direction1_demographic_filter}</b><div style={{ fontSize: 10.5, opacity: .65 }}>match this tester's stated preference</div></div>
+                <div><b>{matches.after_direction2_reverse_eligibility}</b><div style={{ fontSize: 10.5, opacity: .65 }}>of those, are also open to this tester</div></div>
+                <div><b>{matches.finalists_that_would_reach_relationship_reasoning}</b><div style={{ fontSize: 10.5, opacity: .65 }}>strong enough to be considered a real intro</div></div>
+              </div>
+
+              {(matches.finalists_after_reranking || []).length ? (
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: LAV, marginBottom: 8 }}>Closest candidates</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {matches.finalists_after_reranking.map((f) => (
+                      <div key={f.candidate_id} style={{ padding: '10px 12px', borderRadius: 12, background: SAND, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div>
+                          <b>{f.candidate_name || shortId(f.candidate_id)}</b>
+                          <div style={{ fontSize: 11, opacity: .65, marginTop: 2 }}>{f.evidence_count} shared evidence points{!f.reciprocal_complete && ' · one-sided only'}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: 12.5 }}>
+                          <div>overall {f.score}</div>
+                          <div style={{ opacity: .65 }}>them→tester {f.reverse ?? '—'} · tester→them {f.forward}</div>
+                          <div style={{ marginTop: 2, color: f.would_pass_deterministic_gate ? SAGE : '#8B3A3A', fontWeight: 600 }}>
+                            {f.would_pass_deterministic_gate ? f.would_pass_deterministic_gate.replaceAll('_', ' ') : 'not close enough yet'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : <div style={{ opacity: .65, fontSize: 13 }}>No candidates were close enough to rank.</div>}
+
+              <div style={{ fontSize: 11, opacity: .55 }}>Refreshed just now · readiness {matches.readiness}%</div>
+            </div>
+          )}
+          <button onClick={loadMatches} disabled={matchesLoading} style={{ marginTop: 16, border: `1px solid ${SKY}`, borderRadius: 999, padding: '8px 14px', background: 'transparent', color: SAGE, cursor: matchesLoading ? 'default' : 'pointer' }}>{matchesLoading ? 'Checking…' : 'Re-check'}</button>
+        </Card>
+      )}
     </div>
   );
 }
