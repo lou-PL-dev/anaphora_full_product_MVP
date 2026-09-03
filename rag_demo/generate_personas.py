@@ -98,15 +98,10 @@ ATTACHMENT_DESCRIPTIONS = {
 }
 
 
-# The trait sampler only ever covers personality (Big Five) and
-# relationship_dynamic (attachment style) — it says nothing about the other
-# 5 Blueprint categories. Left alone, that meant every candidate narrative
-# only ever had material to touch 2 of the 7 categories real users are now
-# extracted across, so candidates almost never reached the "5 of 7 including
-# personality/lifestyle/relationship_dynamic" bar readiness.py requires of
-# real users — see dataset_documentation.md's "Candidate depth fix" note.
-# These 5 categories borrow the SAME curated label pools profiles.py's
-# baseline generator already uses, rather than inventing a second set.
+# The trait sampler covers personality and attachment structure. These
+# additional categories borrow the same curated pools used by the baseline
+# generator. Candidate appearance is deliberately excluded from ME here: it
+# is grounded later in the actual assigned photo by ingest_candidates.py.
 NARRATIVE_CATEGORY_KEYS = {
     "IDEAL_PARTNER": [
         ("IDEAL_PARTNER", "lifestyle"),
@@ -118,11 +113,35 @@ NARRATIVE_CATEGORY_KEYS = {
     ],
     "ME": [
         ("ME", "lifestyle"),
-        ("ME", "physical_type"),
         ("ME", "relationship_behavior"),
         ("ME", "core_values"),
     ],
 }
+
+# Concrete life anchors give each synthetic candidate a recognisable life,
+# not merely a bag of agreeable traits. Every anchor includes texture and a
+# limitation; the narrative model may elaborate, but must remain consistent
+# with it. They are deliberately not scored as hard requirements.
+LIFE_ANCHORS = [
+    "Works in a small architecture studio, restores an old bicycle on Sundays, hosts two close friends for dinner, and can become overly absorbed in work before deadlines.",
+    "Teaches secondary-school science, sings in an amateur choir, calls family every weekend, and needs quiet time after socially intense days.",
+    "Runs a neighbourhood bakery, starts work before sunrise, loves slow afternoon walks, and is terrible at replying to messages while busy.",
+    "Works as a freelance sound engineer, spends weekends around live music, cooks elaborate late breakfasts, and has an irregular schedule that requires flexibility.",
+    "Is a hospital physiotherapist, climbs twice a week, keeps a calm home, and sometimes takes too much responsibility for other people's problems.",
+    "Works in public-sector policy, collects second-hand ceramics, maintains a small long-standing friend group, and tends to over-plan travel.",
+    "Builds software for a cooperative, volunteers at a community garden, enjoys strategy games, and can retreat into problem-solving instead of naming feelings immediately.",
+    "Is an independent photographer, travels for short assignments, swims whenever possible, and values freedom enough that routines take negotiation.",
+    "Manages a busy restaurant, knows half the neighbourhood, spends days off reading alone, and can be blunt when tired.",
+    "Works in renewable-energy operations, trains for long-distance cycling trips, likes practical projects at home, and struggles with last-minute changes.",
+    "Is a museum educator, goes to small theatre productions, shares Sunday lunch with siblings, and can avoid conflict until there is time to think.",
+    "Works as a carpenter, plays in a casual football league, prefers a few dependable friendships, and is slow to trust new people.",
+    "Is completing specialist medical training, loves dancing badly at house parties, protects one screen-free evening a week, and has limited free time in intense rotations.",
+    "Works for a social enterprise, spends weekends hiking or campaigning locally, enjoys crowded dinner tables, and occasionally commits to more than is realistic.",
+    "Designs costumes for film and theatre, experiments with clothes, keeps unconventional hours, and needs a partner who does not interpret solitude as rejection.",
+    "Owns a small bookshop, remembers customers' reading tastes, prefers countryside weekends, and can be stubborn about familiar routines.",
+    "Works in logistics, boxes after work, loves precise cooking projects, and finds emotional conversations easier after having time to process.",
+    "Is a landscape gardener, spends most days outdoors, enjoys low-key evenings with friends, and dislikes organising plans far in advance.",
+]
 
 # How many distinct ingredient labels to draw per narrative category. A
 # single ingredient per category gave each category roughly 1 signal after
@@ -133,6 +152,7 @@ NARRATIVE_CATEGORY_KEYS = {
 # Sampling more ingredients per category gives one-shot extraction more
 # raw material to pull multiple signals from, closer to that real density.
 CATEGORY_INGREDIENT_COUNT = 2
+NARRATIVE_TEMPERATURE = 0.7
 
 
 def sample_category_ingredients(
@@ -150,6 +170,10 @@ def sample_category_ingredients(
     }
 
 
+def sample_life_anchor(rng: random.Random) -> str:
+    return rng.choice(LIFE_ANCHORS)
+
+
 def describe_trait_profile(trait_profile: dict, category_ingredients: dict[str, list[str]] | None = None) -> str:
     bf = trait_profile["big_five"]
     phrases = [BIG_FIVE_DESCRIPTIONS[(t, bf[t])] for t in BIG_FIVE_TRAITS]
@@ -162,7 +186,10 @@ def describe_trait_profile(trait_profile: dict, category_ingredients: dict[str, 
 
 
 def build_narrative_prompt(
-    trait_profile: dict, style_examples: list[str], category_ingredients: dict[str, list[str]] | None = None
+    trait_profile: dict,
+    style_examples: list[str],
+    category_ingredients: dict[str, list[str]] | None = None,
+    speaker_context: str | None = None,
 ) -> list[dict]:
     """Chat messages for the narrative-writing call. The trait sketch sets
     WHAT to describe (the ideal partner's traits); the style examples set
@@ -180,6 +207,13 @@ def build_narrative_prompt(
         "— do NOT reuse their wording, topics, or details, they're style "
         "reference only:\n" + examples_block
     )
+    speaker_block = (
+        "\n\nThe speaker's own profile is below. Make their preferences plausible for this "
+        "specific person without simply cloning them. Preserve one meaningful difference, "
+        "trade-off or edge where appropriate, and do not introduce accidental contradictions.\n"
+        f"SPEAKER PROFILE:\n{speaker_context}"
+        if speaker_context else ""
+    )
     user = (
         "Write that message for someone whose ideal partner would be described "
         "this way: " + describe_trait_profile(trait_profile, category_ingredients) + "\n\n"
@@ -191,21 +225,36 @@ def build_narrative_prompt(
         "Keep each detail in its correct ME / ideal partner / relationship meaning. End with one brief, "
         "natural sentence revealing something small about the speaker themselves, "
         "the way people naturally do when describing what they want."
+        + speaker_block
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def generate_narrative_via_llm(trait_profile: dict, category_ingredients: dict[str, list[str]] | None = None) -> str:
+def generate_narrative_via_llm(
+    trait_profile: dict,
+    category_ingredients: dict[str, list[str]] | None = None,
+    speaker_context: str | None = None,
+) -> str:
     from app.config import settings
     from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.9, api_key=settings.openai_api_key)
-    messages = build_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES, category_ingredients)
+    llm = ChatOpenAI(
+        model=settings.openai_model,
+        temperature=NARRATIVE_TEMPERATURE,
+        api_key=settings.openai_api_key,
+    )
+    messages = build_narrative_prompt(
+        trait_profile, STYLE_SEED_EXAMPLES, category_ingredients, speaker_context=speaker_context
+    )
     return llm.invoke(messages).content.strip()
 
 
 def build_self_narrative_prompt(
-    trait_profile: dict, style_examples: list[str], category_ingredients: dict[str, list[str]] | None = None
+    trait_profile: dict,
+    style_examples: list[str],
+    category_ingredients: dict[str, list[str]] | None = None,
+    life_anchor: str | None = None,
+    age: int | None = None,
 ) -> list[dict]:
     """Same trait sampler and style-seeding approach as build_narrative_prompt,
     but framed as the CANDIDATE describing THEMSELVES — used for RAG-matching
@@ -223,25 +272,44 @@ def build_self_narrative_prompt(
         "— do NOT reuse their wording, topics, or details, they're style "
         "reference only:\n" + examples_block
     )
+    life_block = (
+        f"\n\nAGE: {age if age is not None else 'unspecified'}\nLIFE CONTEXT: {life_anchor}\n"
+        "Ground the bio in this context. Include at least two concrete, ordinary details and "
+        "keep the limitation or friction visible rather than polishing it into a strength."
+        if life_anchor else ""
+    )
     user = (
         "Write a self-description for someone whose own personality would be described this "
         "way: " + describe_trait_profile(trait_profile, category_ingredients) + "\n\n"
         "Translate those traits into ordinary, concrete language and specific little details "
         "about how THEY live and act — never name a trait directly (no 'high conscientiousness', "
         "no 'secure attachment'). Naturally weave in the concrete details about their lifestyle, "
-        "physical presence, relationship behaviour and core principles — "
-        "as part of the story, never a checklist. Write it entirely in first person, about the "
-        "speaker, not about a partner they're looking for."
+        "relationship behaviour and core principles as part of the story, never a checklist. "
+        "Do not make them generically perfect: retain specific limits, contradictions and awkward "
+        "edges. Write it entirely in first person, about the speaker, not about a partner they're looking for."
+        + life_block
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def generate_self_narrative_via_llm(trait_profile: dict, category_ingredients: dict[str, list[str]] | None = None) -> str:
+def generate_self_narrative_via_llm(
+    trait_profile: dict,
+    category_ingredients: dict[str, list[str]] | None = None,
+    life_anchor: str | None = None,
+    age: int | None = None,
+) -> str:
     from app.config import settings
     from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(model=settings.openai_model, temperature=0.9, api_key=settings.openai_api_key)
-    messages = build_self_narrative_prompt(trait_profile, STYLE_SEED_EXAMPLES, category_ingredients)
+    llm = ChatOpenAI(
+        model=settings.openai_model,
+        temperature=NARRATIVE_TEMPERATURE,
+        api_key=settings.openai_api_key,
+    )
+    messages = build_self_narrative_prompt(
+        trait_profile, STYLE_SEED_EXAMPLES, category_ingredients,
+        life_anchor=life_anchor, age=age,
+    )
     return llm.invoke(messages).content.strip()
 
 
@@ -251,7 +319,11 @@ def _ingredients_sentence(category_ingredients: dict[str, list[str]] | None) -> 
     return " " + " ".join(f"{label}." for labels in category_ingredients.values() for label in labels)
 
 
-def offline_self_narrative(trait_profile: dict, category_ingredients: dict[str, list[str]] | None = None) -> str:
+def offline_self_narrative(
+    trait_profile: dict,
+    category_ingredients: dict[str, list[str]] | None = None,
+    life_anchor: str | None = None,
+) -> str:
     """No-LLM stand-in for build_self_narrative_prompt's output — same role
     as offline_narrative() for the ideal-partner personas. Keeps the same
     "who's X" construction BIG_FIVE_DESCRIPTIONS was written for (e.g.
@@ -262,7 +334,8 @@ def offline_self_narrative(trait_profile: dict, category_ingredients: dict[str, 
     attach = ATTACHMENT_DESCRIPTIONS[trait_profile["attachment_style"]]
     return (
         "I'm someone who's " + ", who's ".join(phrases) + ". "
-        f"In relationships I tend to be {attach}."
+        f"In relationships I tend to be {attach}. "
+        + (life_anchor or "")
         + _ingredients_sentence(category_ingredients)
     )
 
@@ -305,13 +378,18 @@ def extraction_result_to_signals(result) -> list[Signal]:
     return signals
 
 
-def generate_persona(rng: random.Random, persona_id: str, use_llm: bool = True) -> Persona:
+def generate_persona(
+    rng: random.Random,
+    persona_id: str,
+    use_llm: bool = True,
+    speaker_context: str | None = None,
+) -> Persona:
     from app.chains.extraction_chain import extract_blueprint
 
     trait_profile = sample_trait_profile(rng)
     ingredients = sample_category_ingredients(rng, "IDEAL_PARTNER")
     narrative = (
-        generate_narrative_via_llm(trait_profile, ingredients) if use_llm
+        generate_narrative_via_llm(trait_profile, ingredients, speaker_context=speaker_context) if use_llm
         else offline_narrative(trait_profile, ingredients)
     )
     history = [
@@ -327,21 +405,31 @@ def generate_persona_pool(n: int, seed: int | None = None, use_llm: bool = True)
     return [generate_persona(rng, f"trait-grounded-{i}", use_llm=use_llm) for i in range(n)]
 
 
-def generate_candidate_persona(rng: random.Random, candidate_id: str, use_llm: bool = True) -> Persona:
+def generate_candidate_persona(
+    rng: random.Random,
+    candidate_id: str,
+    use_llm: bool = True,
+    age: int | None = None,
+    life_anchor: str | None = None,
+    physical_labels: list[str] | None = None,
+) -> Persona:
     """Like generate_persona, but for RAG-matching CANDIDATES: the narrative
     describes who this persona IS (self-profile), not who they want — see
     build_self_narrative_prompt. The candidate's own signals come from
-    result.me (not result.ideal_partner) for the same reason. Demographic
-    display fields (name/age/gender/photo) are NOT set here — that's
-    presentation-layer data, assigned by ingest_candidates.py, kept
-    separate from this trait/narrative/extraction generation step."""
+    result.me (not result.ideal_partner) for the same reason. Name, gender,
+    and photo are assigned by ingest_candidates.py; age and photo-grounded
+    physical labels may be supplied here so the narrative and structured
+    profile remain consistent with what the interface displays."""
     from app.chains.extraction_chain import extract_blueprint
 
     trait_profile = sample_trait_profile(rng)
     ingredients = sample_category_ingredients(rng, "ME")
+    life_anchor = life_anchor or sample_life_anchor(rng)
     narrative = (
-        generate_self_narrative_via_llm(trait_profile, ingredients) if use_llm
-        else offline_self_narrative(trait_profile, ingredients)
+        generate_self_narrative_via_llm(
+            trait_profile, ingredients, life_anchor=life_anchor, age=age
+        ) if use_llm
+        else offline_self_narrative(trait_profile, ingredients, life_anchor=life_anchor)
     )
     history = [
         {"role": "assistant", "content": OPENING_PROMPT_SELF},
@@ -353,6 +441,11 @@ def generate_candidate_persona(rng: random.Random, candidate_id: str, use_llm: b
         for category in type(result.me).model_fields
         for item in getattr(result.me, category)
     ]
+    signals = [signal for signal in signals if signal.category != "physical_type"]
+    signals.extend(
+        Signal("ME", "physical_type", label, "preference", "Visible in profile photo")
+        for label in (physical_labels or [])
+    )
     return Persona(id=candidate_id, narrative=narrative, signals=signals)
 
 

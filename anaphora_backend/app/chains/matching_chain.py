@@ -26,8 +26,12 @@ BROAD_RETRIEVAL_SIZE = 24
 FINALIST_SIZE = 6
 MAX_MATCHES_SHOWN = 1
 SEMANTIC_SIGNAL_THRESHOLD = 0.58
-STRONG_FIT_THRESHOLD = 0.68
-MIN_RECIPROCAL_DIRECTION_SCORE = 0.48
+WORTH_EXPLORING_THRESHOLD = 0.52
+STRONG_FIT_THRESHOLD = 0.64
+MIN_WORTH_DIRECTION_SCORE = 0.45
+MIN_RECIPROCAL_DIRECTION_SCORE = 0.55
+MIN_WORTH_EVIDENCE = 3
+MIN_STRONG_EVIDENCE = 5
 LEGACY_RECIPROCITY_PENALTY = 0.82
 
 CATEGORY_WEIGHTS = {
@@ -80,6 +84,22 @@ _NEGATION_MARKERS = {
     "refuse", "refuses", "not", "no", "never", "isn't", "aren't", "wasn't",
     "won't", "wouldn't", "can't", "cannot", "don't", "doesn't", "didn't",
     "without", "lack", "lacks", "lacking", "unwilling", "dealbreaker",
+}
+
+# Cross-category matching is useful when ordinary language files the same
+# idea differently ("adventurous" can be personality or lifestyle), but an
+# unrestricted search lets one generic signal explain almost anything. These
+# are the only neighbouring categories allowed to support each other.
+CATEGORY_COMPATIBILITY = {
+    "personality": {"personality", "lifestyle", "relationship_behavior", "core_values"},
+    "lifestyle": {"lifestyle", "personality"},
+    "physical_type": {"physical_type"},
+    "relationship_behavior": {"relationship_behavior", "relationship_shape", "connection_affection"},
+    "core_values": {"core_values", "shared_direction"},
+    "relationship_shape": {"relationship_shape", "relationship_behavior"},
+    "connection_affection": {"connection_affection", "relationship_behavior"},
+    "shared_direction": {"shared_direction", "core_values", "lifestyle"},
+    "boundaries": {"boundaries", "relationship_shape", "shared_direction", "lifestyle"},
 }
 
 
@@ -288,53 +308,57 @@ def _directional_score(
     all_actual = [signal for group in actual_by_category.values() for signal in group]
     weighted_total = 0.0
     weight_total = 0.0
-    category_scores: list[float] = []
     evidence_pairs: list[str] = []
+    matched_categories: set[str] = set()
+    used_actual: set[int] = set()
 
-    for category, desired_group in desired_by_category.items():
-        actual_group = actual_by_category.get(category, [])
-        if actual_group:
-            desired_category_text = " ; ".join(_signal_text(s) for s in desired_group)
-            actual_category_text = " ; ".join(_signal_text(s) for s in actual_group)
-            category_scores.append(max(0.0, _cosine(vector(desired_category_text), vector(actual_category_text))))
+    # Match the most important needs first. An actual signal may support only
+    # one desired signal, preventing a single generic sentence from being
+    # recycled as evidence for several different needs.
+    ordered_desired = sorted(
+        ((category, desired) for category, group in desired_by_category.items() for desired in group),
+        key=lambda item: _signal_weight(item[1]),
+        reverse=True,
+    )
+    for category, desired in ordered_desired:
+        desired_label = desired.get("label", "") if isinstance(desired, dict) else desired.label or ""
+        compatible_categories = CATEGORY_COMPATIBILITY.get(category, {category})
+        best = None
+        best_index = None
+        best_similarity = -1.0
+        for index, actual in enumerate(all_actual):
+            if index in used_actual:
+                continue
+            actual_category = actual.get("category", "") if isinstance(actual, dict) else actual.category or ""
+            if actual_category not in compatible_categories:
+                continue
+            actual_label = actual.get("label", "") if isinstance(actual, dict) else actual.label or ""
+            if _has_negation(desired_label) != _has_negation(actual_label):
+                continue
+            sim = _cosine(vector(_signal_text(desired)), vector(_signal_text(actual)))
+            if sim > best_similarity:
+                best_similarity = sim
+                best = actual
+                best_index = index
 
-        for desired in desired_group:
-            desired_label = desired.get("label", "") if isinstance(desired, dict) else desired.label or ""
-            best = None
-            best_similarity = -1.0
-            # Search every actual signal, not just this category's — real
-            # conversational extraction and the synthetic candidate generator
-            # don't always file the same concept under the same category
-            # (e.g. "adventurous" as personality for one persona, an
-            # "Adventure" lifestyle lean for a real user), so restricting to
-            # same-category comparison silently missed genuine overlap. This
-            # also means a category the other side never touched no longer
-            # scores as a flat mismatch — it's simply absent evidence, and
-            # gets whatever real similarity the rest of their profile offers.
-            for actual in all_actual:
-                actual_label = actual.get("label", "") if isinstance(actual, dict) else actual.label or ""
-                if _has_negation(desired_label) != _has_negation(actual_label):
-                    continue
-                sim = _cosine(vector(_signal_text(desired)), vector(_signal_text(actual)))
-                if sim > best_similarity:
-                    best_similarity = sim
-                    best = actual
+        weight = _signal_weight(desired)
+        weight_total += weight
+        weighted_total += weight * max(0.0, best_similarity if best is not None else 0.0)
 
-            weight = _signal_weight(desired)
-            weight_total += weight
-            weighted_total += weight * max(0.0, best_similarity if best is not None else 0.0)
-
-            if best is not None and best_similarity >= SEMANTIC_SIGNAL_THRESHOLD:
-                desired_strength = desired.get("strength", "preference") if isinstance(desired, dict) else desired.strength or "preference"
-                desired_text = desired.get("label") if isinstance(desired, dict) else desired.label
-                actual_text = best.get("label") if isinstance(best, dict) else best.label
-                evidence_pairs.append(
-                    f"{category}: wants '{desired_text}' ({desired_strength}); evidence '{actual_text}'"
-                )
+        if best is not None:
+            used_actual.add(best_index)
+        if best is not None and best_similarity >= SEMANTIC_SIGNAL_THRESHOLD:
+            matched_categories.add(category)
+            desired_strength = desired.get("strength", "preference") if isinstance(desired, dict) else desired.strength or "preference"
+            desired_text = desired.get("label") if isinstance(desired, dict) else desired.label
+            actual_text = best.get("label") if isinstance(best, dict) else best.label
+            evidence_pairs.append(
+                f"{category}: wants '{desired_text}' ({desired_strength}); evidence '{actual_text}'"
+            )
 
     atomic_score = weighted_total / weight_total if weight_total else 0.0
-    category_score = sum(category_scores) / len(category_scores) if category_scores else 0.0
-    return 0.78 * atomic_score + 0.22 * category_score, evidence_pairs
+    category_coverage = len(matched_categories) / len(desired_by_category) if desired_by_category else 0.0
+    return 0.90 * atomic_score + 0.10 * category_coverage, evidence_pairs
 
 
 def _reciprocal_score(forward: float, reverse: float | None, broad_similarity: float) -> float:

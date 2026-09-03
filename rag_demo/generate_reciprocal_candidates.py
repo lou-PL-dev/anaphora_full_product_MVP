@@ -20,10 +20,19 @@ def generate_reciprocal_candidate_persona(
     rng: random.Random,
     candidate_id: str,
     use_llm: bool = True,
+    age: int | None = None,
+    life_anchor: str | None = None,
+    physical_labels: list[str] | None = None,
 ) -> Persona:
     """Create one symmetric synthetic candidate without conflating perspectives."""
-    self_profile = generate_candidate_persona(rng, candidate_id, use_llm=use_llm)
-    ideal_profile = generate_persona(rng, f"{candidate_id}-ideal", use_llm=use_llm)
+    self_profile = generate_candidate_persona(
+        rng, candidate_id, use_llm=use_llm, age=age,
+        life_anchor=life_anchor, physical_labels=physical_labels,
+    )
+    ideal_profile = generate_persona(
+        rng, f"{candidate_id}-ideal", use_llm=use_llm,
+        speaker_context=self_profile.narrative,
+    )
 
     ideal_signals = [
         signal for signal in ideal_profile.signals

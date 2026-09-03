@@ -12,7 +12,7 @@ from ..models import Candidate
 from ..schemas import FitLevel, MatchExplanationsResult, MatchSection
 
 RELATIONSHIP_REASONING_PROMPT = """You are Anaphora's relationship-level compatibility reasoner.
-You receive a small finalist set that has already passed demographic eligibility, semantic retrieval and reciprocal reranking. Do NOT re-search or rescue weak candidates.
+You receive a small shortlist selected for closer inspection. Ranking highest in the available pool does NOT mean a candidate is compatible. Do NOT re-search, rescue weak candidates, or assume that one candidate must be accepted.
 
 Your job is to reason about the likely relationship fit using ONLY the structured Blueprints and grounded evidence supplied.
 
@@ -25,6 +25,7 @@ For each finalist, distinguish these ideas instead of collapsing them into gener
 
 Decision rules:
 - has_genuine_match=false when the evidence is too thin, substantially one-sided, or contains a meaningful incompatibility that makes an introduction irresponsible.
+- It is valid and often preferable to reject every finalist. Never manufacture an introduction merely because candidates were supplied.
 - recommended_fit=strong_fit only when there is convincing reciprocal evidence across several important dimensions and no significant unresolved incompatibility.
 - recommended_fit=worth_exploring when an introduction is still genuinely worthwhile but evidence is thinner, more asymmetric, or includes a real non-disqualifying tension.
 - recommended_fit must be null when has_genuine_match=false.

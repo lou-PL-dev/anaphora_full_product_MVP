@@ -62,6 +62,22 @@ PHOTO_FILES = {
     "nonbinary": ["/candidates/a1.jpg", "/candidates/a2.jpg"],
 }
 
+# These labels describe only clearly visible features in the corresponding
+# profile asset. Physical signals must come from the displayed photo rather
+# than being randomly invented independently of it.
+PHOTO_PHYSICAL_LABELS = {
+    "/candidates/m1.jpg": ["Dark wavy hair", "Short beard", "Light expressive eyes"],
+    "/candidates/m2.jpg": ["Dark curly hair", "Full beard", "Jewellery and an easygoing style"],
+    "/candidates/m3.jpg": ["Tousled blond hair", "Light stubble", "Light expressive eyes"],
+    "/candidates/m4.jpg": ["Short coiled hair", "Close beard", "Understated style"],
+    "/candidates/f1.jpg": ["Dark hair worn loosely up", "Freckles", "Natural understated style"],
+    "/candidates/f2.jpg": ["Shoulder-length blond hair", "Light eyes", "Minimal elegant style"],
+    "/candidates/f3.jpg": ["Dark curly hair", "Expressive eyes", "Layered jewellery"],
+    "/candidates/f4.jpg": ["Shoulder-length dark hair", "Minimal style", "Warm brown eyes"],
+    "/candidates/a1.jpg": ["Short tousled dark hair", "Androgynous style", "Distinctive jewellery"],
+    "/candidates/a2.jpg": ["Short blond hair", "Androgynous style", "Nose ring and minimal jewellery"],
+}
+
 GENDER_WEIGHTS = [("male", 0.45), ("female", 0.45), ("nonbinary", 0.10)]
 DEMOGRAPHIC_PREFERENCE_GENDERS = ["male", "female", "nonbinary", "other"]
 
@@ -139,18 +155,18 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
     embedder = OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
 
     db = SessionLocal()
-    succeeded = 0
+    pending_candidates = []
     try:
-        if clear:
-            db.query(Candidate).delete()
-            db.commit()
-
         for i in range(n):
             try:
-                persona = generate_reciprocal_candidate_persona(
-                    rng, f"candidate-{i}", use_llm=True
-                )
                 demo = demographics[i]
+                persona = generate_reciprocal_candidate_persona(
+                    rng,
+                    f"candidate-{i}",
+                    use_llm=True,
+                    age=demo["age"],
+                    physical_labels=PHOTO_PHYSICAL_LABELS.get(demo["photo_url"], []),
+                )
                 signal_dicts = [s.as_dict() for s in persona.signals]
                 signal_dicts.append(demo["demographic_preferences"])
                 embedding = embedder.embed_query(candidate_me_embedding_text(persona))
@@ -159,7 +175,7 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                 ideal_count = sum(1 for s in persona.signals if s.perspective == "IDEAL_PARTNER")
                 us_count = sum(1 for s in persona.signals if s.perspective == "US")
 
-                db.add(Candidate(
+                pending_candidates.append(Candidate(
                     name=demo["name"],
                     age=demo["age"],
                     gender=demo["gender"],
@@ -168,8 +184,6 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                     signals=signal_dicts,
                     embedding=embedding,
                 ))
-                db.commit()
-                succeeded += 1
                 prefs = demo["demographic_preferences"]
                 print(
                     f"  [{i + 1}/{n}] {demo['name']} ({demo['gender']}, {demo['age']}) "
@@ -177,19 +191,40 @@ def ingest(n: int, seed: int | None = None, clear: bool = False) -> int:
                     f"— open to {','.join(prefs['gender_preferences'])} {prefs['age_min']}–{prefs['age_max']}"
                 )
             except Exception as e:
-                db.rollback()
                 print(f"  [{i + 1}/{n}] FAILED — {e!r} — continuing with the rest")
+
+        # Build the replacement completely before touching the live pool. A
+        # transient LLM or embedding failure must not leave --clear users with
+        # an empty or partially regenerated candidate table.
+        if clear and len(pending_candidates) != n:
+            print(
+                f"\nReplacement aborted: generated {len(pending_candidates)}/{n} candidates. "
+                "The existing candidate pool was retained unchanged."
+            )
+            return 0
+
+        if clear:
+            db.query(Candidate).delete(synchronize_session=False)
+        db.add_all(pending_candidates)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
-    return succeeded
+    return len(pending_candidates)
 
 
 def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("-n", type=int, default=50, help="candidate pool size")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--clear", action="store_true", help="delete existing candidates before ingesting")
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="atomically replace existing candidates after the full new pool is generated",
+    )
     args = parser.parse_args()
 
     count = ingest(args.n, seed=args.seed, clear=args.clear)

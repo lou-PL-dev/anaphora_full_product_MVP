@@ -23,6 +23,14 @@ function candidatePhoto(candidate) {
   return pool[stablePhotoIndex(candidate.id || candidate.name, pool.length)];
 }
 
+function candidateExcerpt(narrative) {
+  const text = String(narrative || '').trim();
+  if (!text) return '';
+  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const excerpt = sentences.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
+  return excerpt.length <= 360 ? excerpt : `${excerpt.slice(0, 357).trimEnd()}…`;
+}
+
 function MatchLoading() {
   return <div style={{ minHeight: '62vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '12px 14px 54px' }}>
     <style>{`@keyframes anaphoraFlowA{0%,100%{transform:translate(-4px,2px) rotate(-8deg) scale(1)}50%{transform:translate(9px,-4px) rotate(-2deg) scale(1.04)}}@keyframes anaphoraFlowB{0%,100%{transform:translate(4px,3px) rotate(8deg) scale(1)}50%{transform:translate(-9px,-3px) rotate(2deg) scale(1.05)}}@keyframes anaphoraLine{0%{stroke-dashoffset:90;opacity:.3}50%{opacity:.85}100%{stroke-dashoffset:-90;opacity:.3}}`}</style>
@@ -32,8 +40,9 @@ function MatchLoading() {
 }
 
 function MatchCard({ match, primary }) {
-  const { candidate, fit, sections } = match; const shownSections = primary ? sections : sections.slice(0,1);
+  const { candidate, fit, sections } = match; const shownSections = primary ? sections : sections.slice(0,1); const excerpt = candidateExcerpt(candidate.narrative);
   return <div style={{padding:primary?18:14,borderRadius:primary?24:20,background:'#FFFFFF',border:'1px solid #DDEAE6',boxShadow:primary?'0 8px 26px rgba(166,154,205,.10)':'none'}}><div style={{position:'relative',height:primary?300:130}}><div style={{position:'absolute',inset:0,overflow:'hidden',borderRadius:'56% 44% 48% 52% / 46% 50% 50% 54%',background:'linear-gradient(140deg, rgba(166,154,205,.35), #DDEAE6)'}}><PortraitSlot src={candidatePhoto(candidate)} label={initials(candidate.name)}/></div><div style={{position:'absolute',top:12,right:6,padding:'8px 14px',borderRadius:999,background:'#A69ACD',color:'#FFFFFF',fontSize:12,fontWeight:500,pointerEvents:'none'}}>{FIT_LABEL[fit]||FIT_LABEL.worth_exploring}</div></div><div style={{marginTop:primary?16:12,display:'flex',alignItems:'baseline',gap:8}}><div style={{fontFamily:"'Playfair Display', serif",fontSize:primary?26:17,color:'#2F4A3F'}}>{candidate.name}</div>{primary&&<div style={{fontSize:13,color:'#A69ACD'}}>{candidate.age}</div>}</div>{!primary&&<div style={{marginTop:2,fontSize:11,color:'#A69ACD'}}>{candidate.age}</div>}
+  {primary&&excerpt&&<div style={{marginTop:15,padding:'16px 17px',borderRadius:18,background:'#F2EDE6'}}><div style={{fontSize:9.5,letterSpacing:'.14em',color:'#A69ACD'}}>A LITTLE ABOUT THEM</div><div style={{marginTop:8,fontFamily:"'Playfair Display', serif",fontSize:15.5,lineHeight:1.58,color:'#2F4A3F'}}>{excerpt}</div></div>}
   {primary&&<div style={{marginTop:16,padding:18,borderRadius:18,background:'#DDEAE6'}}><div style={{fontSize:10,letterSpacing:'.14em',color:'#A69ACD'}}>WHY ANAPHORA THINKS YOU SHOULD MEET</div><div style={{marginTop:14,display:'flex',flexDirection:'column',gap:14}}>{shownSections.map(sec=><div key={sec.heading}><div style={{fontSize:13,fontWeight:600,color:'#2F4A3F'}}>{sec.heading}</div><div style={{marginTop:4,fontSize:13,lineHeight:1.6,color:'#2F4A3F'}}>{sec.body}</div></div>)}</div><div style={{marginTop:16,paddingTop:14,borderTop:'1px solid #FFFFFF',fontSize:11.5,color:'#A69ACD'}}>Explainable AI — we show you why, not just who.</div></div>}{!primary&&shownSections.map(sec=><div key={sec.heading} style={{marginTop:10,fontSize:12,lineHeight:1.5,color:'#2F4A3F'}}>{sec.body}</div>)}{primary&&<div style={{marginTop:14,display:'flex',gap:10}}><button style={{flex:1,padding:15,borderRadius:999,border:'1px solid #DDEAE6',background:'transparent',color:'#2F4A3F',fontSize:13.5,cursor:'pointer'}}>Not now</button><button style={{flex:2,padding:15,border:'none',borderRadius:999,background:'#2F4A3F',color:'#F2EDE6',fontSize:13.5,fontWeight:500,cursor:'pointer'}}>Say hello</button></div>}</div>;
 }
 

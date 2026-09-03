@@ -1,7 +1,9 @@
 """Focused Iteration 4 tests that do not require Postgres or OpenAI calls."""
 
 from app.chains.matching_chain import _candidate_signals, _reciprocal_score
+from app.chains.matching_chain_v5 import deterministic_fit_ceiling
 from app.models import Candidate
+from app.schemas import FitLevel
 
 
 def test_reciprocal_score_penalizes_one_sided_fit():
@@ -49,3 +51,27 @@ def test_old_candidate_signals_default_to_me_for_backwards_compatibility():
     )
     assert [s["label"] for s in _candidate_signals(candidate, "ME")] == ["Community matters"]
     assert _candidate_signals(candidate, "IDEAL_PARTNER") == []
+
+
+def _evidence() -> list[str]:
+    return [
+        "USER WANTS -> CANDIDATE IS: personality: wants 'warm' (strong_preference); evidence 'warm'",
+        "USER WANTS -> CANDIDATE IS: lifestyle: wants 'active' (preference); evidence 'cycles'",
+        "CANDIDATE WANTS -> USER IS: personality: wants 'curious' (preference); evidence 'curious'",
+        "CANDIDATE WANTS -> USER IS: core_values: wants 'honest' (strong_preference); evidence 'honest'",
+        "SHARED RELATIONSHIP VISION: relationship_shape: wants 'equal' (preference); evidence 'equal'",
+    ]
+
+
+def test_fit_ceiling_rejects_top_ranked_but_weak_candidate():
+    assert deterministic_fit_ceiling(0.49, 0.70, 0.70, _evidence(), True) is None
+
+
+def test_fit_ceiling_requires_evidence_in_both_person_directions():
+    one_sided = [item for item in _evidence() if not item.startswith("CANDIDATE WANTS")]
+    assert deterministic_fit_ceiling(0.70, 0.70, 0.70, one_sided, True) is None
+
+
+def test_fit_ceiling_distinguishes_worth_exploring_from_strong():
+    assert deterministic_fit_ceiling(0.58, 0.50, 0.49, _evidence(), True) == FitLevel.worth_exploring
+    assert deterministic_fit_ceiling(0.70, 0.65, 0.64, _evidence(), True) == FitLevel.strong_fit

@@ -24,8 +24,8 @@ Every persona is `{id, narrative, signals[]}`. Each signal is:
 
 | field | type | notes |
 |---|---|---|
-| `perspective` | `"ME"` \| `"IDEAL_PARTNER"` | matches `anaphora_backend/app/models.py::BlueprintSignal.perspective` |
-| `category` | string | `personality`/`lifestyle`/`physical_type`/`relationship_dynamic`/`love_language`/`dealbreakers`/`values` — same 7 categories for both IDEAL_PARTNER and ME (`anaphora_backend/app/schemas.py::PerspectiveBlueprint`) |
+| `perspective` | `"ME"` \| `"IDEAL_PARTNER"` \| `"US"` | matches `anaphora_backend/app/models.py::BlueprintSignal.perspective` |
+| `category` | string | ME: `personality`, `lifestyle`, `relationship_behavior`, `core_values`; IDEAL_PARTNER: `personality`, `lifestyle`, `physical_type`; US: `relationship_shape`, `connection_affection`, `shared_direction`, `boundaries` |
 | `label` | string | short human-readable trait description |
 | `strength` | `"hard_requirement"` \| `"strong_preference"` \| `"preference"` \| `"unknown"` | matches `anaphora_backend/app/schemas.py::Strength` |
 | `evidence_text` | string \| null | short supporting quote from the narrative, when extracted (baseline generator leaves this null) |
@@ -39,9 +39,10 @@ structure, not independent per-trait sampling), and an attachment style
 (secure/anxious/avoidant/fearful-avoidant) is derived from the SAME draw via
 the standard ECR anxiety/avoidance quadrant classification, correlated with
 neuroticism/agreeableness/extraversion per the cited literature. This trait
-profile describes the **ideal partner** the persona is going to say they
-want — matching Anaphora's actual product (a user describes who they want,
-not themselves).
+For ideal-partner personas this trait profile describes who the speaker
+wants. For candidate personas, a separate draw describes who the candidate
+is; their desired-partner profile is then generated in the context of that
+self-description.
 
 **2. Narrative** (`generate_personas.py::generate_narrative_via_llm`) — an
 LLM is prompted to write that trait profile as a natural first-person
@@ -137,13 +138,16 @@ want.
 
 `ingest_candidates.py` then:
 1. Generates N candidates this way.
-2. Assigns synthetic display metadata — name, age, gender, and (for a
-   handful of candidates) a photo path — presentation-layer data with no
-   bearing on the psychometric trait sampling, kept in this file rather
-   than in the trait-generation code.
+2. Assigns synthetic display metadata — name, age, gender, and a photo path.
+   Age grounds the self-description, while each photo supplies only the
+   clearly visible physical signals shown to the user; physical traits are
+   never sampled independently of the displayed image.
 3. Computes a real OpenAI embedding (`text-embedding-3-small`) per
    candidate over their narrative + signal labels.
-4. Writes everything into the live `candidates` table (Postgres/pgvector —
+4. Generates the candidate's desired-partner narrative with their own
+   self-description as context, so the two sides form one plausible person
+   rather than two unrelated samples.
+5. Writes everything into the live `candidates` table (Postgres/pgvector —
    see `anaphora_backend/README.md`'s "RAG matching" section) via the
    backend's own SQLAlchemy session — this is genuinely the seed data
    `/matches` retrieves from, not a side artifact.
@@ -156,33 +160,37 @@ artifact.
 ## Candidate depth fix (2026-09-01)
 
 The first version of `generate_candidate_persona` sampled a trait profile
-covering only Big Five (→ `personality`) and attachment style (→ roughly
-`relationship_dynamic`), then wrote a single 3-5 sentence self-description
-from just that and ran it through extraction once. That narrative
-structurally had nothing to say about `lifestyle`, `physical_type`,
-`love_language`, `dealbreakers`, or `values` — so candidates almost never
-reached the "5 of 7 categories, including personality/lifestyle/
-relationship_dynamic" completeness bar `anaphora_backend/app/readiness.py`
-requires of real users, and `matching_chain.py`'s LLM judge (correctly,
-per its own "don't fabricate a connection" instructions) had little to
-work with.
+covering only Big Five (→ `personality`) and attachment style, then wrote a
+single 3-5 sentence self-description from just that and ran it through
+extraction once. That narrative structurally had little to say about
+lifestyle, appearance, concrete relationship behaviour, core values, or the
+relationship the person wanted to build. Candidates therefore offered too
+little multi-dimensional evidence, and `matching_chain.py`'s LLM judge
+(correctly, per its own "don't fabricate a connection" instructions) had
+little to work with.
 
-Fix: `sample_category_ingredients()` draws one concrete detail per
-category the trait sampler doesn't cover, from the same curated
+Fix: `sample_category_ingredients()` draws concrete details per category
+the trait sampler doesn't cover, from the same curated
 `CANDIDATE_LABELS` pools `profiles.py`'s baseline generator already uses.
 `describe_trait_profile()`, `build_narrative_prompt()`, and
-`build_self_narrative_prompt()` all weave these in and explicitly instruct
-the model to touch every category (naturally, not as a checklist), so the
-resulting narrative — and therefore extraction — actually has something
-to say about all 7. `test_generate_candidate_pool_reaches_readiness_bar`
-in `test_generation.py` checks this directly against real users' own
-completeness bar (imported from `readiness.py`, not re-defined here).
+`build_self_narrative_prompt()` weave these in and explicitly instruct the
+model to touch every relevant category naturally, not as a checklist. The
+resulting narrative and extraction therefore provide evidence across several
+dimensions. `test_generate_candidate_pool_reaches_readiness_bar` checks that
+the candidate self-profile covers the minimum dimensions matching relies on.
+
+The generator also adds one concrete life anchor (work, routines, hobbies,
+and an ordinary constraint) to each candidate, grounds physical signals in
+the assigned photo, and conditions desired-partner preferences on the
+candidate's self-profile. These constraints make profiles more internally
+coherent and less generically "perfect" while preserving variation.
 
 Existing candidates generated before this fix should be replaced, not kept
 alongside the new ones — run `python ingest_candidates.py --clear -n 50`
-rather than a plain `-n 50` append. Nothing else in the schema references
-`Candidate` rows by id (matches are computed fresh per request, nothing
-persists a link to a specific candidate), so clearing is safe.
+rather than a plain `-n 50` append. With `--clear`, the replacement is now
+atomic: the live pool is deleted only after every new candidate and embedding
+has been generated successfully. If any generation fails, the existing pool
+is retained unchanged.
 
 ## Known limitations
 
@@ -222,6 +230,7 @@ persists a link to a specific candidate), so clearing is safe.
   `test_generation.py` except the one explicitly marked end-to-end) can run
   without an API key; it is a visibly templated stand-in, not a claim about
   what real generated output reads like.
-- **No changes to `anaphora_backend`.** This is a `rag_demo`-only addition,
-  per the brief's own scope — it imports `extract_blueprint` from the
-  backend rather than duplicating or modifying it.
+- **Limited photo inventory.** The demo currently has only 10 profile-image
+  assets, so a 50-candidate pool necessarily reuses photos. The physical
+  descriptions are truthful to those assets, but unique candidate photos
+  are still needed before this can feel production-real.

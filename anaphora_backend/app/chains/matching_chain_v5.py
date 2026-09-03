@@ -5,6 +5,8 @@ semantic reranking. This module adds the final relationship reasoning layer.
 """
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from ..models import BlueprintSignal
@@ -12,9 +14,13 @@ from ..schemas import CandidateOut, FitLevel, MatchOut
 from .matching_chain import (
     BROAD_RETRIEVAL_SIZE,
     FINALIST_SIZE,
+    MIN_STRONG_EVIDENCE,
+    MIN_WORTH_DIRECTION_SCORE,
+    MIN_WORTH_EVIDENCE,
     MAX_MATCHES_SHOWN,
     MIN_RECIPROCAL_DIRECTION_SCORE,
     STRONG_FIT_THRESHOLD,
+    WORTH_EXPLORING_THRESHOLD,
     _profile_embedding_text,
     candidate_accepts_user,
     embed_text,
@@ -22,6 +28,57 @@ from .matching_chain import (
     semantic_rerank_candidates,
 )
 from .relationship_reasoning_chain import assess_relationship_candidates
+
+logger = logging.getLogger(__name__)
+
+
+def _evidence_dimensions(evidence: list[str]) -> tuple[set[str], set[str]]:
+    directions: set[str] = set()
+    categories: set[str] = set()
+    for item in evidence:
+        direction, separator, rest = item.partition(": ")
+        if not separator:
+            continue
+        category, category_separator, _detail = rest.partition(":")
+        directions.add(direction)
+        if category_separator and category:
+            categories.add(category.strip())
+    return directions, categories
+
+
+def deterministic_fit_ceiling(
+    score: float,
+    forward: float,
+    reverse: float | None,
+    evidence: list[str],
+    reciprocal_complete: bool,
+) -> FitLevel | None:
+    """Highest label the evidence can earn before the LLM may downgrade it."""
+    if not reciprocal_complete or reverse is None:
+        return None
+    directions, categories = _evidence_dimensions(evidence)
+    has_both_person_directions = {
+        "USER WANTS -> CANDIDATE IS",
+        "CANDIDATE WANTS -> USER IS",
+    }.issubset(directions)
+    if (
+        score < WORTH_EXPLORING_THRESHOLD
+        or forward < MIN_WORTH_DIRECTION_SCORE
+        or reverse < MIN_WORTH_DIRECTION_SCORE
+        or len(evidence) < MIN_WORTH_EVIDENCE
+        or len(categories) < 2
+        or not has_both_person_directions
+    ):
+        return None
+    if (
+        score >= STRONG_FIT_THRESHOLD
+        and forward >= MIN_RECIPROCAL_DIRECTION_SCORE
+        and reverse >= MIN_RECIPROCAL_DIRECTION_SCORE
+        and len(evidence) >= MIN_STRONG_EVIDENCE
+        and len(categories) >= 3
+    ):
+        return FitLevel.strong_fit
+    return FitLevel.worth_exploring
 
 
 def find_matches(
@@ -98,21 +155,25 @@ def find_matches(
     genuine = []
     for candidate, score, forward, reverse, evidence, reciprocal_complete in finalists:
         has_match, model_fit, sections = verdicts.get(candidate.id, (False, None, []))
-        if not has_match or not sections:
-            continue
-
-        strong_fit_allowed = (
-            reciprocal_complete
-            and reverse is not None
-            and forward >= MIN_RECIPROCAL_DIRECTION_SCORE
-            and reverse >= MIN_RECIPROCAL_DIRECTION_SCORE
-            and score >= STRONG_FIT_THRESHOLD
-            and len(evidence) >= 4
+        fit_ceiling = deterministic_fit_ceiling(
+            score, forward, reverse, evidence, reciprocal_complete
         )
+        if not has_match or not sections or fit_ceiling is None:
+            logger.info(
+                "match_rejected candidate=%s score=%.3f forward=%.3f reverse=%s evidence=%d model_match=%s ceiling=%s",
+                candidate.id, score, forward,
+                f"{reverse:.3f}" if reverse is not None else "none",
+                len(evidence), has_match, fit_ceiling,
+            )
+            continue
         fit = (
             FitLevel.strong_fit
-            if model_fit == FitLevel.strong_fit and strong_fit_allowed
+            if model_fit == FitLevel.strong_fit and fit_ceiling == FitLevel.strong_fit
             else FitLevel.worth_exploring
+        )
+        logger.info(
+            "match_accepted candidate=%s fit=%s score=%.3f forward=%.3f reverse=%.3f evidence=%d model_fit=%s",
+            candidate.id, fit.value, score, forward, reverse, len(evidence), model_fit,
         )
         genuine.append((candidate, fit, sections))
         if len(genuine) >= MAX_MATCHES_SHOWN:

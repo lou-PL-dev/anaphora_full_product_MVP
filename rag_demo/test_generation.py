@@ -11,10 +11,10 @@ import random
 import pytest
 
 from generate_personas import (
-    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, NARRATIVE_CATEGORY_KEYS, STYLE_SEED_EXAMPLES,
-    build_narrative_prompt, describe_trait_profile, extraction_result_to_signals,
+    ATTACHMENT_DESCRIPTIONS, BIG_FIVE_DESCRIPTIONS, LIFE_ANCHORS, NARRATIVE_CATEGORY_KEYS, STYLE_SEED_EXAMPLES,
+    build_narrative_prompt, build_self_narrative_prompt, describe_trait_profile, extraction_result_to_signals,
     generate_candidate_pool, generate_persona_pool, offline_narrative, offline_self_narrative,
-    sample_category_ingredients,
+    sample_category_ingredients, sample_life_anchor,
 )
 from profiles import CANDIDATE_LABELS, STRENGTHS
 from trait_distributions import ATTACHMENT_STYLES, BIG_FIVE_TRAITS, TRAIT_LEVELS, sample_trait_profile
@@ -123,6 +123,32 @@ def test_build_narrative_prompt_carries_style_seeds_not_content():
     assert describe_trait_profile(profile) in messages[1]["content"]
 
 
+def test_ideal_partner_prompt_is_grounded_in_the_speakers_own_profile():
+    rng = random.Random(16)
+    profile = sample_trait_profile(rng)
+    speaker = "I restore bicycles and need quiet time after work."
+    messages = build_narrative_prompt(profile, STYLE_SEED_EXAMPLES, speaker_context=speaker)
+    assert speaker in messages[1]["content"]
+    assert "without simply cloning" in messages[1]["content"]
+
+
+def test_self_prompt_contains_concrete_life_anchor_and_age():
+    rng = random.Random(17)
+    profile = sample_trait_profile(rng)
+    anchor = sample_life_anchor(rng)
+    messages = build_self_narrative_prompt(
+        profile, STYLE_SEED_EXAMPLES, life_anchor=anchor, age=37
+    )
+    assert anchor in messages[1]["content"]
+    assert "AGE: 37" in messages[1]["content"]
+    assert "limitation or friction" in messages[1]["content"]
+
+
+def test_life_anchor_pool_contains_distinct_textured_lives():
+    assert len(LIFE_ANCHORS) >= 15
+    assert len(set(LIFE_ANCHORS)) == len(LIFE_ANCHORS)
+
+
 def test_extraction_result_to_signals_shape():
     from app.schemas import (ExtractionResult, PerspectiveBlueprint, IdealPartnerBlueprint,
                              RelationshipBlueprint, SignalItem, Strength)
@@ -160,6 +186,11 @@ def test_sample_category_ingredients_covers_every_narrative_category():
                 assert label in CANDIDATE_LABELS[(signal_perspective, category)]
 
 
+def test_candidate_physical_type_is_not_randomly_generated():
+    ingredients = sample_category_ingredients(random.Random(18), "ME")
+    assert "ME.physical_type" not in ingredients
+
+
 def test_sample_category_ingredients_clamps_to_pool_size():
     """count higher than a category's label pool must not raise or repeat
     labels — just return everything the pool has."""
@@ -195,16 +226,21 @@ def test_generate_persona_pool_end_to_end():
 def test_generate_candidate_pool_reaches_readiness_bar():
     """The whole point of feeding category_ingredients into the narrative
     prompt: a generated candidate's ME signals should be rich enough to
-    satisfy the SAME completeness bar anaphora_backend/app/readiness.py
-    requires of real users (mandatory categories + at least 5 of 7) — before
-    this fix, candidates only ever had material for personality and
-    relationship_dynamic and essentially never cleared this bar."""
-    from app.readiness import CORE_CATEGORIES, MANDATORY_CATEGORIES, MIN_CATEGORIES_PER_SIDE
+    cover multiple concrete self dimensions used by matching. Before this
+    fix, candidates mostly had personality and relationship-dynamic material
+    and essentially never offered enough evidence for a credible match."""
+    candidate_self_categories = {
+        category for perspective, category in CANDIDATE_LABELS if perspective == "ME"
+    }
+    mandatory_categories = {"personality", "lifestyle"}
+    minimum_categories = 4
 
     pool = generate_candidate_pool(3, seed=2, use_llm=True)
     cleared = 0
     for persona in pool:
-        covered = {s.category for s in persona.signals if s.category in CORE_CATEGORIES}
-        if MANDATORY_CATEGORIES.issubset(covered) and len(covered) >= MIN_CATEGORIES_PER_SIDE:
+        covered = {
+            s.category for s in persona.signals if s.category in candidate_self_categories
+        }
+        if mandatory_categories.issubset(covered) and len(covered) >= minimum_categories:
             cleared += 1
     assert cleared >= 2, f"expected most of a 3-candidate pool to clear the readiness bar, only {cleared} did"

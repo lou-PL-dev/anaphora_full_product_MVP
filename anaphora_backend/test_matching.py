@@ -151,13 +151,14 @@ def test_directional_score_missing_category_is_not_a_flat_mismatch():
     still be found."""
     desired = [
         {"category": "personality", "label": "calm", "evidence_text": "very calm", "strength": "hard_requirement"},
-        {"category": "love_language", "label": "quality time", "evidence_text": "quality time together", "strength": "strong_preference"},
+        {"category": "connection_affection", "label": "quality time", "evidence_text": "quality time together", "strength": "strong_preference"},
     ]
     actual = [
         {"category": "personality", "label": "calm", "evidence_text": "very calm", "strength": "strong_preference"},
         # Same idea as the desired "quality time" want, filed under a
-        # different category — nothing under "love_language" at all.
-        {"category": "relationship_dynamic", "label": "quality time together", "evidence_text": "quality time together", "strength": "preference"},
+        # different but compatible category — nothing under
+        # "connection_affection" at all.
+        {"category": "relationship_behavior", "label": "quality time together", "evidence_text": "quality time together", "strength": "preference"},
     ]
 
     def vector(text):
@@ -171,6 +172,29 @@ def test_directional_score_missing_category_is_not_a_flat_mismatch():
     score, evidence = _directional_score(desired, actual, vector)
     assert len(evidence) == 2
     assert score > 0.9
+
+
+def test_directional_score_does_not_reuse_one_signal_for_multiple_needs():
+    desired = [
+        {"category": "personality", "label": "warm", "strength": "strong_preference"},
+        {"category": "personality", "label": "kind", "strength": "strong_preference"},
+    ]
+    actual = [{"category": "personality", "label": "warm and kind"}]
+
+    score, evidence = _directional_score(desired, actual, lambda _text: [1.0, 0.0])
+
+    assert len(evidence) == 1
+    assert score < 0.7
+
+
+def test_directional_score_keeps_physical_evidence_in_physical_category():
+    desired = [{"category": "physical_type", "label": "dark curly hair", "strength": "strong_preference"}]
+    actual = [{"category": "personality", "label": "dark sense of humour and a curious mind"}]
+
+    score, evidence = _directional_score(desired, actual, lambda _text: [1.0, 0.0])
+
+    assert score == 0.0
+    assert evidence == []
 
 
 def test_judge_and_explain_empty_candidates_short_circuits():
