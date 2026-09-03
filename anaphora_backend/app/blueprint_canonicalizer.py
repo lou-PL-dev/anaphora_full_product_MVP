@@ -44,6 +44,15 @@ Canonicalization rules:
 
 The narrative is a presentation layer, not a second store of facts. Write ONE coherent replacement paragraph exclusively about the IDEAL_PARTNER, addressed directly to the member. Use only IDEAL_PARTNER evidence. Never describe the member, never say "the user", never append multiple summaries, and never claim that the person will complement the member unless that exact preference is supported. If there is no IDEAL_PARTNER evidence, return an empty narrative. Use the language of the evidence when clear."""
 
+# canonicalize_evidence's structured output must satisfy strict grounding
+# checks in _materialize (every evidence ID accounted for, only allow-listed
+# categories, no stray "the user" phrasing) — a single occasional model miss
+# on real, non-trivial evidence sets would otherwise 500 the whole
+# /conversation/complete request with zero recovery. Retrying the LLM call
+# itself (not just re-validating the same bad output) gives the model
+# another chance without loosening any of those checks.
+MAX_CANONICALIZATION_ATTEMPTS = 3
+
 _STRENGTH_RANK = {
     "unknown": 0,
     "preference": 1,
@@ -230,11 +239,22 @@ def rebuild_blueprint(db: Session, user: User) -> list[BlueprintSignal]:
     )
 
     if evidence:
-        result = canonicalize_evidence(evidence)
-        projection = _materialize(result, evidence)
-        narrative = result.narrative.strip()
-        if "the user" in narrative.casefold():
-            raise ValueError("Canonical narrative must address the member directly")
+        projection = None
+        narrative = ""
+        last_error: ValueError | None = None
+        for _attempt in range(MAX_CANONICALIZATION_ATTEMPTS):
+            result = canonicalize_evidence(evidence)
+            try:
+                projection = _materialize(result, evidence)
+                narrative = result.narrative.strip()
+                if "the user" in narrative.casefold():
+                    raise ValueError("Canonical narrative must address the member directly")
+                last_error = None
+                break
+            except ValueError as e:
+                last_error = e
+        if last_error is not None:
+            raise last_error
     else:
         projection = []
         narrative = ""
