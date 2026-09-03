@@ -14,19 +14,16 @@ function coveredCategories(signals, perspective) {
 export function mockReadiness(signals, discoveryDone, meetingPreference) {
   const me = coveredCategories(signals, 'ME');
   const ideal = coveredCategories(signals, 'IDEAL_PARTNER');
-  const us = coveredCategories(signals, 'US');
   const met = {
     introduction_essentials: false,
     meeting_preferences: !!meetingPreference,
     discovery_completed: !!discoveryDone,
     me_profile: me.has('personality') && me.has('lifestyle') && me.size >= 3,
     ideal_partner_profile: ['personality', 'lifestyle', 'physical_type'].every((category) => ideal.has(category)),
-    us_profile: us.has('relationship_shape') && us.size >= 3,
   };
   const total = (met.meeting_preferences ? 10 : 0)
     + (met.discovery_completed ? 20 : 0)
-    + (met.me_profile ? 20 : 0)
-    + (met.ideal_partner_profile ? 20 : 0)
-    + (met.us_profile ? 20 : 0);
+    + (met.me_profile ? 30 : 0)
+    + (met.ideal_partner_profile ? 30 : 0);
   return { total, met };
 }

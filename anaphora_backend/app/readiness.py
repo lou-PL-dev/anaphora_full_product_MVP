@@ -1,4 +1,9 @@
-"""Deterministic readiness for the shared ME / YOU / US Blueprint."""
+"""Deterministic introduction readiness for the ME / YOU / US Blueprint.
+
+US signals deepen the Blueprint and matching, but they are optional enrichment
+and never block an introduction. The four readiness areas are essentials,
+one Discovery, sufficient ME coverage, and sufficient IDEAL_PARTNER coverage.
+"""
 from sqlalchemy.orm import Session
 
 from .models import BlueprintSignal, DiscoveryResponse, User
@@ -11,9 +16,8 @@ ALLOWED = {
 CATEGORY_WEIGHTS = {
     "introduction_essentials": 20,
     "discovery_completed": 20,
-    "me_profile": 20,
-    "ideal_partner_profile": 20,
-    "us_profile": 20,
+    "me_profile": 30,
+    "ideal_partner_profile": 30,
 }
 
 
@@ -38,15 +42,11 @@ def _ideal_ready(covered):
     return ALLOWED["IDEAL_PARTNER"].issubset(covered)
 
 
-def _us_ready(covered):
-    return "relationship_shape" in covered and len(covered) >= 3
-
-
 def compute_readiness(db: Session, user_id: str) -> tuple[int, dict]:
     signals = db.query(BlueprintSignal).filter(BlueprintSignal.user_id == user_id).all()
     user = db.get(User, user_id)
     has_discovery = db.query(DiscoveryResponse).filter(DiscoveryResponse.user_id == user_id).first() is not None
-    me, ideal, us = category_coverage(signals)
+    me, ideal, _us = category_coverage(signals)
 
     your_essentials_met = bool(user and user.gender and user.birth_date)
     meeting_preferences_met = bool(user and user.gender_preference and user.preferred_age_range)
@@ -55,7 +55,6 @@ def compute_readiness(db: Session, user_id: str) -> tuple[int, dict]:
         "discovery_completed": bool(has_discovery),
         "me_profile": _me_ready(me),
         "ideal_partner_profile": _ideal_ready(ideal),
-        "us_profile": _us_ready(us),
     }
     total = introduction_score + sum(CATEGORY_WEIGHTS[key] for key, met in statuses.items() if met)
     breakdown = {
@@ -68,8 +67,7 @@ def compute_readiness(db: Session, user_id: str) -> tuple[int, dict]:
             },
         },
         "discovery_completed": {"weight": 20, "earned": 20 if statuses["discovery_completed"] else 0, "met": statuses["discovery_completed"]},
-        "me_profile": {"weight": 20, "earned": 20 if statuses["me_profile"] else 0, "met": statuses["me_profile"], "covered_categories": sorted(me)},
-        "ideal_partner_profile": {"weight": 20, "earned": 20 if statuses["ideal_partner_profile"] else 0, "met": statuses["ideal_partner_profile"], "covered_categories": sorted(ideal)},
-        "us_profile": {"weight": 20, "earned": 20 if statuses["us_profile"] else 0, "met": statuses["us_profile"], "covered_categories": sorted(us)},
+        "me_profile": {"weight": 30, "earned": 30 if statuses["me_profile"] else 0, "met": statuses["me_profile"], "covered_categories": sorted(me)},
+        "ideal_partner_profile": {"weight": 30, "earned": 30 if statuses["ideal_partner_profile"] else 0, "met": statuses["ideal_partner_profile"], "covered_categories": sorted(ideal)},
     }
     return total, breakdown

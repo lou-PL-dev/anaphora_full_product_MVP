@@ -18,9 +18,8 @@ export const DISCOVERY_LIBRARY = [
 export const WEIGHTS = {
   introduction_essentials: [20, 'Introduction essentials'],
   discovery_completed: [20, 'A Discovery completed'],
-  me_profile: [20, 'About you'],
-  ideal_partner_profile: [20, "Who you're looking for"],
-  us_profile: [20, 'What you want to build together'],
+  me_profile: [30, 'About you'],
+  ideal_partner_profile: [30, "Who you're looking for"],
 };
 
 export const BASE_CATEGORIES = [

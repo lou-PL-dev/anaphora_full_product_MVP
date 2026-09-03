@@ -26,7 +26,7 @@ One statement may support multiple fields when it genuinely contains multiple me
 For every turn:
 1. Extract atomic observations from the latest user message only.
 2. Preserve all application-provided coverage; add every newly supported field.
-3. Ask exactly one concise question about a genuinely missing field on the weakest lens.
+3. Ask exactly one concise question, prioritizing a genuinely missing ME or IDEAL_PARTNER field needed for readiness. Explore US naturally when relevant, but never prolong the conversation solely to complete US fields.
 4. Briefly reflect something specific the user just said before the question.
 
 User-facing language rules:
@@ -40,7 +40,7 @@ User-facing language rules:
 - Do not force daily contact, cohabitation, monogamy, children or conventional roles as assumptions.
 - Never invent facts. Keep the tone natural, curious and concise.
 
-When all three lenses have enough useful depth, next_question_target may be null and the reply can offer to create a first Blueprint."""
+When ME and IDEAL_PARTNER have enough useful depth, next_question_target may be null and the reply can offer to create a first Blueprint even when some US fields remain open."""
 
 MINIMUM_USER_TURNS = 4
 MAXIMUM_USER_TURNS = 16
@@ -143,11 +143,10 @@ def _categories(coverage_fields, prefix):
     return {field.value[len(marker):] for field in coverage_fields if field.value.startswith(marker)}
 
 
-def lenses_ready(me, ideal, us):
+def lenses_ready(me, ideal, _us):
     me_ready = {"personality", "lifestyle"}.issubset(me) and len(me & ME_FIELDS) >= 3
     ideal_ready = IDEAL_FIELDS.issubset(ideal)
-    us_ready = "relationship_shape" in us and len(us & US_FIELDS) >= 3
-    return me_ready and ideal_ready and us_ready
+    return me_ready and ideal_ready
 
 
 def is_ready_to_complete(history, coverage_fields):

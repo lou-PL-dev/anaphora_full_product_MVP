@@ -13,8 +13,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
+from app.chains.conversation_chain import is_ready_to_complete
 from app.models import BlueprintSignal, Discovery, DiscoveryResponse, User
 from app.readiness import compute_readiness
+from app.schemas import CoverageField
 
 TEST_DB_URL = "sqlite:///./test_readiness.db"
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
@@ -142,19 +144,19 @@ def test_one_me_signal_plus_discovery_does_not_unlock_me_gate():
     db.close()
 
 
-def test_sufficient_me_profile_is_twenty():
+def test_sufficient_me_profile_is_thirty():
     db = _new_db()
     user = _user(db)
     _ready_side(db, user.id, "ME")
-    assert compute_readiness(db, user.id)[0] == 20
+    assert compute_readiness(db, user.id)[0] == 30
     db.close()
 
 
-def test_sufficient_ideal_partner_profile_is_twenty():
+def test_sufficient_ideal_partner_profile_is_thirty():
     db = _new_db()
     user = _user(db)
     _ready_side(db, user.id, "IDEAL_PARTNER")
-    assert compute_readiness(db, user.id)[0] == 20
+    assert compute_readiness(db, user.id)[0] == 30
     db.close()
 
 
@@ -167,17 +169,50 @@ def test_missing_mandatory_category_does_not_unlock_profile_gate():
     db.close()
 
 
-def test_all_four_areas_reach_one_hundred():
+def test_all_readiness_requirements_reach_one_hundred():
     db = _new_db()
     user = _user(db, essentials=True, preferences=True)
     _discovery(db, user.id)
     _ready_side(db, user.id, "ME")
     _ready_side(db, user.id, "IDEAL_PARTNER")
-    _ready_side(db, user.id, "US")
     score, breakdown = compute_readiness(db, user.id)
     assert score == 100
     assert all(item["met"] for item in breakdown.values())
     db.close()
+
+
+def test_us_profile_is_optional_enrichment_for_readiness():
+    db = _new_db()
+    user = _user(db, essentials=True, preferences=True)
+    _discovery(db, user.id)
+    _ready_side(db, user.id, "ME")
+    _ready_side(db, user.id, "IDEAL_PARTNER")
+
+    score, breakdown = compute_readiness(db, user.id)
+
+    assert score == 100
+    assert breakdown["ideal_partner_profile"]["met"] is True
+    assert "us_profile" not in breakdown
+    db.close()
+
+
+def test_conversation_can_finish_without_us_coverage():
+    history = [
+        {"role": role, "content": f"turn {index}"}
+        for index, role in enumerate(
+            ["assistant", "user", "assistant", "user", "assistant", "user", "assistant", "user"]
+        )
+    ]
+    coverage = [
+        CoverageField.me_personality,
+        CoverageField.me_lifestyle,
+        CoverageField.me_relationship_behavior,
+        CoverageField.ideal_partner_personality,
+        CoverageField.ideal_partner_lifestyle,
+        CoverageField.ideal_partner_physical_type,
+    ]
+
+    assert is_ready_to_complete(history, coverage) is True
 
 
 def test_extra_discovery_responses_do_not_add_more_points():
