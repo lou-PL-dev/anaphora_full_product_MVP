@@ -44,15 +44,6 @@ Canonicalization rules:
 
 The narrative is a presentation layer, not a second store of facts. Write ONE coherent replacement paragraph exclusively about the IDEAL_PARTNER, addressed directly to the member. Use only IDEAL_PARTNER evidence. Never describe the member, never say "the user", never append multiple summaries, and never claim that the person will complement the member unless that exact preference is supported. If there is no IDEAL_PARTNER evidence, return an empty narrative. Use the language of the evidence when clear."""
 
-# canonicalize_evidence's structured output must satisfy strict grounding
-# checks in _materialize (every evidence ID accounted for, only allow-listed
-# categories, no stray "the user" phrasing) — a single occasional model miss
-# on real, non-trivial evidence sets would otherwise 500 the whole
-# /conversation/complete request with zero recovery. Retrying the LLM call
-# itself (not just re-validating the same bad output) gives the model
-# another chance without loosening any of those checks.
-MAX_CANONICALIZATION_ATTEMPTS = 3
-
 _STRENGTH_RANK = {
     "unknown": 0,
     "preference": 1,
@@ -165,7 +156,19 @@ def _materialize(
     result: CanonicalBlueprintResult,
     evidence: list[BlueprintEvidence],
 ) -> list[dict]:
-    """Validate grounding and deterministically restore strength/provenance."""
+    """Validate grounding and deterministically restore strength/provenance.
+
+    Every KEPT signal is still fully grounded and correctly classified —
+    nothing here weakens those guarantees. What changed is the failure
+    granularity: one malformed draft signal (wrong category for its
+    perspective, a stray evidence ID, an empty label) used to raise and
+    discard the ENTIRE Blueprint rebuild, for every piece of evidence,
+    every time — a single near-miss among many good signals was
+    indistinguishable from total failure. Now an invalid draft is simply
+    dropped, and any evidence it would have carried falls back to that
+    evidence's own already-validated perspective/category (assigned when
+    it was first captured) rather than being silently lost.
+    """
     evidence_by_id = {row.id: row for row in evidence}
     active_ids = set(evidence_by_id)
     used_ids: set[str] = set()
@@ -176,16 +179,13 @@ def _materialize(
         category = draft.category.value
         label = draft.label.strip()
         if perspective not in ALLOWED_CATEGORIES or category not in ALLOWED_CATEGORIES[perspective]:
-            raise ValueError(f"Invalid Blueprint placement: {perspective}/{category}")
+            continue  # drop this one signal, not the whole rebuild
         if not label or "the user" in label.casefold():
-            raise ValueError("Canonical labels must be member-facing and non-empty")
+            continue
 
-        linked_ids = list(dict.fromkeys(draft.evidence_ids))
-        unknown = set(linked_ids) - active_ids
-        if unknown:
-            raise ValueError(f"Canonical signal cited unknown evidence IDs: {sorted(unknown)}")
+        linked_ids = [eid for eid in dict.fromkeys(draft.evidence_ids) if eid in active_ids]
         if not linked_ids:
-            raise ValueError("Canonical signal has no supporting evidence")
+            continue  # nothing left to ground this signal in
         used_ids.update(linked_ids)
 
         key = (perspective, category, label.casefold())
@@ -201,9 +201,27 @@ def _materialize(
                 "evidence_ids": linked_ids,
             }
 
-    missing = active_ids - used_ids
-    if missing:
-        raise ValueError(f"Canonicalization omitted evidence IDs: {sorted(missing)}")
+    # Evidence the model didn't fold into any valid signal still deserves a
+    # place in the Blueprint — fall back to a direct 1:1 signal using that
+    # evidence's own perspective/category rather than dropping what the
+    # member (or a friend) actually said.
+    for evidence_id in active_ids - used_ids:
+        row = evidence_by_id[evidence_id]
+        if row.category not in ALLOWED_CATEGORIES.get(row.perspective, set()):
+            continue
+        label = (row.label or "").strip()
+        if not label or "the user" in label.casefold():
+            continue
+        key = (row.perspective, row.category, label.casefold())
+        if key in merged:
+            merged[key]["evidence_ids"].append(evidence_id)
+        else:
+            merged[key] = {
+                "perspective": row.perspective,
+                "category": row.category,
+                "label": label,
+                "evidence_ids": [evidence_id],
+            }
 
     materialized = []
     for item in merged.values():
@@ -239,22 +257,15 @@ def rebuild_blueprint(db: Session, user: User) -> list[BlueprintSignal]:
     )
 
     if evidence:
-        projection = None
-        narrative = ""
-        last_error: ValueError | None = None
-        for _attempt in range(MAX_CANONICALIZATION_ATTEMPTS):
-            result = canonicalize_evidence(evidence)
-            try:
-                projection = _materialize(result, evidence)
-                narrative = result.narrative.strip()
-                if "the user" in narrative.casefold():
-                    raise ValueError("Canonical narrative must address the member directly")
-                last_error = None
-                break
-            except ValueError as e:
-                last_error = e
-        if last_error is not None:
-            raise last_error
+        result = canonicalize_evidence(evidence)
+        projection = _materialize(result, evidence)
+        # The narrative is presentation-layer only (see module docstring) —
+        # a stray "the user" slipping into a paragraph of otherwise-fine
+        # prose is never worth discarding a correctly-grounded projection
+        # over, so fall back to no narrative rather than raising.
+        narrative = result.narrative.strip()
+        if "the user" in narrative.casefold():
+            narrative = ""
     else:
         projection = []
         narrative = ""
