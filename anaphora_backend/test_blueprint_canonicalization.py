@@ -126,7 +126,44 @@ def test_backfill_is_once_and_rebuild_replaces_appended_narrative(monkeypatch):
     assert db.query(BlueprintEvidence).filter_by(user_id="u1").count() == 1
 
 
-def test_invalid_rebuild_does_not_delete_existing_projection(monkeypatch):
+def test_invalid_rebuild_retries_then_keeps_existing_projection(monkeypatch):
+    db = _session()
+    user = User(id="u1", blueprint_narrative="Existing portrait")
+    old = BlueprintSignal(
+        id="old-signal",
+        user_id="u1",
+        perspective="ME",
+        category="lifestyle",
+        label="Enjoys reading",
+        strength="preference",
+        source="canonical",
+    )
+    raw = _evidence("raw", "ME", "lifestyle", "Enjoys reading")
+    new_raw = _evidence("new-raw", "IDEAL_PARTNER", "personality", "Warm")
+    db.add_all([user, old, raw])
+    db.commit()
+
+    db.add(new_raw)
+    attempts = 0
+
+    def invalid_result(rows):
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("Structured canonicalization response was invalid")
+
+    monkeypatch.setattr(canonicalizer, "canonicalize_evidence", invalid_result)
+
+    rebuilt = canonicalizer.rebuild_blueprint(db, user)
+    db.commit()
+
+    assert attempts == 2
+    assert [signal.label for signal in rebuilt] == ["Enjoys reading"]
+    assert db.query(BlueprintSignal).filter_by(user_id="u1").one().label == "Enjoys reading"
+    assert db.query(BlueprintEvidence).filter_by(id="new-raw").one().label == "Warm"
+    assert user.blueprint_narrative == "Existing portrait"
+
+
+def test_invalid_first_attempt_retries_and_rebuilds(monkeypatch):
     db = _session()
     user = User(id="u1", blueprint_narrative="Existing portrait")
     old = BlueprintSignal(
@@ -142,15 +179,49 @@ def test_invalid_rebuild_does_not_delete_existing_projection(monkeypatch):
     db.add_all([user, old, raw])
     db.commit()
 
-    monkeypatch.setattr(canonicalizer, "canonicalize_evidence", lambda rows: CanonicalBlueprintResult.model_validate({
-        "signals": [{
-            "perspective": "ME",
-            "category": "lifestyle",
-            "label": "Invented",
-            "evidence_ids": ["not-real"],
-        }],
-        "narrative": "",
-    }))
+    attempts = 0
+
+    def retry_then_succeed(rows):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ValueError("Structured canonicalization response was invalid")
+        return CanonicalBlueprintResult.model_validate({
+            "signals": [{
+                "perspective": "ME",
+                "category": "lifestyle",
+                "label": "Reads regularly",
+                "evidence_ids": [row.id for row in rows],
+            }],
+            "narrative": "",
+        })
+
+    monkeypatch.setattr(canonicalizer, "canonicalize_evidence", retry_then_succeed)
+
+    rebuilt = canonicalizer.rebuild_blueprint(db, user)
+    db.commit()
+
+    assert attempts == 2
+    assert [signal.label for signal in rebuilt] == ["Reads regularly"]
+    assert db.query(BlueprintSignal).filter_by(user_id="u1").one().label == "Reads regularly"
+    assert user.blueprint_narrative is None
+
+
+def test_invalid_first_blueprint_still_fails_after_retry(monkeypatch):
+    db = _session()
+    user = User(id="u1")
+    raw = _evidence("raw", "ME", "lifestyle", "Enjoys reading")
+    db.add_all([user, raw])
+    db.commit()
+
+    attempts = 0
+
+    def invalid_result(rows):
+        nonlocal attempts
+        attempts += 1
+        raise ValueError("Structured canonicalization response was invalid")
+
+    monkeypatch.setattr(canonicalizer, "canonicalize_evidence", invalid_result)
 
     try:
         canonicalizer.rebuild_blueprint(db, user)
@@ -158,4 +229,5 @@ def test_invalid_rebuild_does_not_delete_existing_projection(monkeypatch):
     except ValueError:
         pass
 
-    assert db.query(BlueprintSignal).filter_by(user_id="u1").one().label == "Enjoys reading"
+    assert attempts == 2
+    assert db.query(BlueprintSignal).filter_by(user_id="u1").count() == 0

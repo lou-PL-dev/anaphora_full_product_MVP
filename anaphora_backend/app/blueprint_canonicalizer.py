@@ -8,6 +8,7 @@ accumulate across conversations, Discoveries, and friend contributions.
 from __future__ import annotations
 
 import json
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -16,11 +17,15 @@ from .models import BlueprintEvidence, BlueprintSignal, User
 from .schemas import CanonicalBlueprintResult
 
 
+logger = logging.getLogger(__name__)
+
 ALLOWED_CATEGORIES = {
     "ME": {"personality", "lifestyle", "relationship_behavior", "core_values", "physical_type"},
     "IDEAL_PARTNER": {"personality", "lifestyle", "physical_type"},
     "US": {"relationship_shape", "connection_affection", "shared_direction", "boundaries"},
 }
+
+CANONICALIZATION_ATTEMPTS = 2
 
 CANONICALIZATION_SYSTEM_PROMPT = """You are the canonicalization layer for Anaphora's Relationship Blueprint.
 
@@ -247,7 +252,13 @@ def _materialize(
 
 
 def rebuild_blueprint(db: Session, user: User) -> list[BlueprintSignal]:
-    """Atomically replace the canonical projection for one member."""
+    """Atomically replace the canonical projection for one member.
+
+    A transient model or structured-output failure gets one bounded retry. If
+    both attempts fail, an existing valid projection is kept while the newly
+    added raw evidence remains available for the next rebuild. A first-ever
+    Blueprint still fails rather than exposing an unvalidated projection.
+    """
     db.flush()
     evidence = (
         db.query(BlueprintEvidence)
@@ -257,15 +268,42 @@ def rebuild_blueprint(db: Session, user: User) -> list[BlueprintSignal]:
     )
 
     if evidence:
-        result = canonicalize_evidence(evidence)
-        projection = _materialize(result, evidence)
-        # The narrative is presentation-layer only (see module docstring) —
-        # a stray "the user" slipping into a paragraph of otherwise-fine
-        # prose is never worth discarding a correctly-grounded projection
-        # over, so fall back to no narrative rather than raising.
-        narrative = result.narrative.strip()
-        if "the user" in narrative.casefold():
-            narrative = ""
+        existing_signals = (
+            db.query(BlueprintSignal)
+            .filter(BlueprintSignal.user_id == user.id)
+            .order_by(BlueprintSignal.created_at.asc(), BlueprintSignal.id.asc())
+            .all()
+        )
+        last_error: Exception | None = None
+        for attempt in range(1, CANONICALIZATION_ATTEMPTS + 1):
+            try:
+                result = canonicalize_evidence(evidence)
+                projection = _materialize(result, evidence)
+                # Narrative is presentation-only. Keep a grounded projection
+                # even if the model uses non-member-facing wording here.
+                narrative = result.narrative.strip()
+                if "the user" in narrative.casefold():
+                    narrative = ""
+                break
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Blueprint canonicalization attempt %s/%s failed for user %s: %s",
+                    attempt,
+                    CANONICALIZATION_ATTEMPTS,
+                    user.id,
+                    exc,
+                )
+        else:
+            if existing_signals:
+                logger.error(
+                    "Keeping the last valid Blueprint for user %s after %s failed attempts",
+                    user.id,
+                    CANONICALIZATION_ATTEMPTS,
+                )
+                return existing_signals
+            assert last_error is not None
+            raise last_error
     else:
         projection = []
         narrative = ""
