@@ -254,6 +254,7 @@ def get_matches_debug(
         age_max=age_max,
         user_gender=user.gender,
         user_age=user.age,
+        user_id=user.id,
     )
     result["readiness"] = readiness
     result["user_own_demographics"] = {"gender": user.gender, "age": user.age}

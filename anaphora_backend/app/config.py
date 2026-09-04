@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     openai_conversation_model: str = "gpt-4o"
     embedding_model: str = "text-embedding-3-small"
 
+    # Explicitly opt-in safeguard for a synthetic golden candidate used in
+    # live demos. Normal matching is unchanged unless this is true, and even
+    # then only a fixture targeted to the current user may use the fallback.
+    anaphora_demo_mode: bool = False
+
     # Small private tester dashboard only. Set ADMIN_SECRET in Render; the
     # secret is never bundled into the frontend and is entered manually on
     # /admin/test-sessions.

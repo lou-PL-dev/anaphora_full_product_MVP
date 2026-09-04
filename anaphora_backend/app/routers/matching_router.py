@@ -47,5 +47,6 @@ def get_matches(user: User = Depends(get_current_user), db: Session = Depends(ge
         age_max=age_max,
         user_gender=user.gender,
         user_age=user.age,
+        user_id=user.id,
     )
     return MatchListResponse(ready=True, readiness_pct=readiness_pct, matches=matches)

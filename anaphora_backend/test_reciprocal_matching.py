@@ -1,7 +1,12 @@
 """Focused Iteration 4 tests that do not require Postgres or OpenAI calls."""
 
 from app.chains.matching_chain import _candidate_signals, _reciprocal_score
-from app.chains.matching_chain_v5 import deterministic_fit_ceiling
+from app.chains.matching_chain_v5 import (
+    deterministic_fit_ceiling,
+    _candidate_available_for_user,
+    _demo_fallback_verdict,
+)
+from app.config import settings
 from app.models import Candidate
 from app.schemas import FitLevel
 
@@ -75,3 +80,37 @@ def test_fit_ceiling_requires_evidence_in_both_person_directions():
 def test_fit_ceiling_distinguishes_worth_exploring_from_strong():
     assert deterministic_fit_ceiling(0.58, 0.50, 0.49, _evidence(), True) == FitLevel.worth_exploring
     assert deterministic_fit_ceiling(0.70, 0.65, 0.64, _evidence(), True) == FitLevel.strong_fit
+
+
+def test_demo_fallback_is_opt_in_targeted_and_still_requires_fit_ceiling(monkeypatch):
+    candidate = Candidate(
+        id="anaphora-demo-match-u1",
+        name="Alex",
+        age=39,
+        gender="male",
+        signals=[{
+            "kind": "demo_fixture",
+            "target_user_id": "u1",
+            "fallback_sections": [{
+                "heading": "Why this could work",
+                "body": "Alex reflects several preferences in this demo Blueprint.",
+            }],
+        }],
+    )
+
+    monkeypatch.setattr(settings, "anaphora_demo_mode", False)
+    assert _candidate_available_for_user(candidate, "u1") is False
+    assert _demo_fallback_verdict(candidate, "u1", FitLevel.strong_fit) is None
+
+    monkeypatch.setattr(settings, "anaphora_demo_mode", True)
+    assert _candidate_available_for_user(candidate, "someone-else") is False
+    assert _candidate_available_for_user(candidate, "u1") is True
+    assert _demo_fallback_verdict(candidate, "someone-else", FitLevel.strong_fit) is None
+    assert _demo_fallback_verdict(candidate, "u1", None) is None
+
+    has_match, fit, sections = _demo_fallback_verdict(
+        candidate, "u1", FitLevel.strong_fit
+    )
+    assert has_match is True
+    assert fit == FitLevel.strong_fit
+    assert sections[0].heading == "Why this could work"

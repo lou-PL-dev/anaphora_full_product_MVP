@@ -9,8 +9,9 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..models import BlueprintSignal
-from ..schemas import CandidateOut, FitLevel, MatchOut
+from ..schemas import CandidateOut, FitLevel, MatchOut, MatchSection
 from .matching_chain import (
     BROAD_RETRIEVAL_SIZE,
     FINALIST_SIZE,
@@ -30,6 +31,60 @@ from .matching_chain import (
 from .relationship_reasoning_chain import assess_relationship_candidates
 
 logger = logging.getLogger(__name__)
+
+
+def _demo_fixture_marker(candidate, user_id: str | None) -> dict | None:
+    """Return only a fixture explicitly targeted to the current demo user."""
+    if not user_id:
+        return None
+    for raw in candidate.signals or []:
+        if (
+            isinstance(raw, dict)
+            and raw.get("kind") == "demo_fixture"
+            and raw.get("target_user_id") == user_id
+        ):
+            return raw
+    return None
+
+
+def _candidate_available_for_user(candidate, user_id: str | None) -> bool:
+    """Keep demo fixtures invisible outside their explicit opt-in scenario."""
+    fixture_markers = [
+        raw for raw in (candidate.signals or [])
+        if isinstance(raw, dict) and raw.get("kind") == "demo_fixture"
+    ]
+    if not fixture_markers:
+        return True
+    return settings.anaphora_demo_mode and any(
+        marker.get("target_user_id") == user_id for marker in fixture_markers
+    )
+
+
+def _demo_fallback_verdict(
+    candidate,
+    user_id: str | None,
+    fit_ceiling: FitLevel | None,
+) -> tuple[bool, FitLevel, list[MatchSection]] | None:
+    """Grounded last resort for one opt-in synthetic demo fixture.
+
+    The fixture must still pass normal retrieval, reciprocal demographics,
+    semantic reranking, and the deterministic fit ceiling. This safeguard
+    changes only the final LLM's ability to reject or omit that one fixture.
+    """
+    if not settings.anaphora_demo_mode or fit_ceiling is None:
+        return None
+    marker = _demo_fixture_marker(candidate, user_id)
+    if marker is None:
+        return None
+    sections = []
+    for raw in marker.get("fallback_sections") or []:
+        try:
+            sections.append(MatchSection.model_validate(raw))
+        except Exception:
+            continue
+    if not sections:
+        return None
+    return True, fit_ceiling, sections
 
 
 def _evidence_dimensions(evidence: list[str]) -> tuple[set[str], set[str]]:
@@ -92,6 +147,7 @@ def find_matches(
     age_max: int | None = None,
     user_gender: str | None = None,
     user_age: int | None = None,
+    user_id: str | None = None,
 ) -> list[MatchOut]:
     """Return at most one introduction after reciprocal eligibility + reasoning."""
     if not user_ideal_partner_signals:
@@ -118,7 +174,8 @@ def find_matches(
     retrieved = [
         (candidate, similarity)
         for candidate, similarity in retrieved
-        if candidate_accepts_user(candidate, user_gender, user_age)
+        if _candidate_available_for_user(candidate, user_id)
+        and candidate_accepts_user(candidate, user_gender, user_age)
     ]
 
     # Reciprocal semantic evidence narrows the pool before the expensive
@@ -143,14 +200,26 @@ def find_matches(
         and (signal.confidence is None or signal.confidence >= 0.70)
     ]
 
-    verdicts = assess_relationship_candidates(
-        user_context,
-        [
-            (candidate, evidence, reciprocal_complete)
-            for candidate, _score, _forward, _reverse, evidence, reciprocal_complete in finalists
-        ],
-        user_hard_requirements=user_hard_requirements,
+    has_targeted_demo_fixture = settings.anaphora_demo_mode and any(
+        _demo_fixture_marker(candidate, user_id) is not None
+        for candidate, *_rest in finalists
     )
+    try:
+        verdicts = assess_relationship_candidates(
+            user_context,
+            [
+                (candidate, evidence, reciprocal_complete)
+                for candidate, _score, _forward, _reverse, evidence, reciprocal_complete in finalists
+            ],
+            user_hard_requirements=user_hard_requirements,
+        )
+    except Exception:
+        if not has_targeted_demo_fixture:
+            raise
+        logger.exception(
+            "Relationship reasoner failed; eligible targeted demo fixture may use its grounded fallback"
+        )
+        verdicts = {}
 
     genuine = []
     for candidate, score, forward, reverse, evidence, reciprocal_complete in finalists:
@@ -158,6 +227,10 @@ def find_matches(
         fit_ceiling = deterministic_fit_ceiling(
             score, forward, reverse, evidence, reciprocal_complete
         )
+        demo_verdict = _demo_fallback_verdict(candidate, user_id, fit_ceiling)
+        if demo_verdict is not None and (not has_match or not sections):
+            has_match, model_fit, sections = demo_verdict
+            logger.warning("Using grounded demo fallback for candidate=%s", candidate.id)
         if not has_match or not sections or fit_ceiling is None:
             logger.info(
                 "match_rejected candidate=%s score=%.3f forward=%.3f reverse=%s evidence=%d model_match=%s ceiling=%s",
@@ -199,6 +272,7 @@ def debug_find_matches(
     age_max: int | None = None,
     user_gender: str | None = None,
     user_age: int | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Same pipeline as find_matches, but reports WHERE candidates fall out
     at each stage instead of only the final result — for the admin tester
@@ -231,7 +305,8 @@ def debug_find_matches(
 
     retrieved = [
         (candidate, similarity) for candidate, similarity in retrieved
-        if candidate_accepts_user(candidate, user_gender, user_age)
+        if _candidate_available_for_user(candidate, user_id)
+        and candidate_accepts_user(candidate, user_gender, user_age)
     ]
     after_direction2 = len(retrieved)
 
